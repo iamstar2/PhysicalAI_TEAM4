@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""보관 기간이 지난 스냅샷/오디오 파일을 정리하는 스크립트.
+"""보관 기간이 지난 스냅샷/오디오 파일을 정리하는 스크립트 (독립 실행, 외부 의존성 없음).
 
 개인정보(얼굴 이미지) 보관 정책: 기본 7일이 지난 날짜 디렉터리(yyyymmdd)를
 통째로 삭제한다. 보관 기간은 환경변수 MECHDOG_RETENTION_DAYS 로 조정한다.
+저장 경로는 MECHDOG_SNAPSHOT_ROOT(기본 /data/snap), MECHDOG_AUDIO_ROOT(기본 /data/audio).
 
 사용법:
     python tools/cleanup_snapshots.py --dry-run   # 삭제 대상만 미리 보기
@@ -16,13 +17,18 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+DEFAULT_RETENTION_DAYS = 7
 
-from mechdog_common.paths import AUDIO_ROOT, DEFAULT_RETENTION_DAYS, SNAPSHOT_ROOT, date_dirs
+
+def _snapshot_root() -> Path:
+    return Path(os.environ.get("MECHDOG_SNAPSHOT_ROOT", "/data/snap"))
+
+
+def _audio_root() -> Path:
+    return Path(os.environ.get("MECHDOG_AUDIO_ROOT", "/data/audio"))
 
 
 def _retention_days() -> int:
@@ -39,10 +45,16 @@ def _retention_days() -> int:
         return DEFAULT_RETENTION_DAYS
 
 
+def _date_dirs(root: Path) -> list[Path]:
+    if not root.exists():
+        return []
+    return [p for p in root.iterdir() if p.is_dir() and len(p.name) == 8 and p.name.isdigit()]
+
+
 def _expired_dirs(root: Path, retention_days: int, today: datetime) -> list[Path]:
     cutoff = today - timedelta(days=retention_days)
     expired = []
-    for d in date_dirs(root):
+    for d in _date_dirs(root):
         try:
             day = datetime.strptime(d.name, "%Y%m%d")
         except ValueError:
@@ -62,7 +74,7 @@ def main() -> int:
     print(f"[cleanup] 보관 기간: {retention_days}일 (기준일: {today:%Y-%m-%d})")
 
     targets: list[Path] = []
-    for root in (SNAPSHOT_ROOT, AUDIO_ROOT):
+    for root in (_snapshot_root(), _audio_root()):
         targets.extend(_expired_dirs(root, retention_days, today))
 
     if not targets:
@@ -82,4 +94,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

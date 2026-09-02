@@ -1,0 +1,15 @@
+{
+  "ver": 1,
+  "msg_id": "31831bbb8e6c4d99b83a55aeec2462b7",
+  "ts": "2026-09-02T14:25:40.547452+09:00",
+  "src": "mechdog_c",
+  "session_id": "sess-20260902142540-mechdog_a-8be84138",
+  "payload": {
+    "msg_type": "escort.status",
+    "state": "moving",
+    "destination": "meeting_room_1",
+    "position": { "x": 2.0, "y": 1.0, "z": 0.0 },
+    "heading_deg": 90.0,
+    "distance_to_target_m": 6.0
+  }
+}

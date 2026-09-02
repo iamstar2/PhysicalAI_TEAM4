@@ -1,2 +1,2 @@
-pydantic>=2.6,<3
+jsonschema>=4.20,<5
 paho-mqtt>=1.6,<2

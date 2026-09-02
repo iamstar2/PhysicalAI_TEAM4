@@ -1,0 +1,15 @@
+{
+  "ver": 1,
+  "msg_id": "5929217cd6f246bbb30f305ec9967b61",
+  "ts": "2026-09-02T14:25:40.822772+09:00",
+  "src": "mechdog_d",
+  "session_id": "sess-20260902142540-mechdog_a-f5b952d7",
+  "payload": {
+    "msg_type": "alert.event",
+    "level": "critical",
+    "reason": "unauthorized",
+    "track_id": "visitor-002",
+    "snapshot_path": "/data/snap/sess-20260902142540-mechdog_a-f5b952d7/alert.jpg",
+    "resolved": false
+  }
+}

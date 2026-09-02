@@ -1,0 +1,15 @@
+{
+  "ver": 1,
+  "msg_id": "f04e540230b94a41be822f8c97847a84",
+  "ts": "2026-09-02T14:25:40.543125+09:00",
+  "src": "mechdog_a",
+  "session_id": "sess-20260902142540-mechdog_a-8be84138",
+  "payload": {
+    "msg_type": "vision.ppe",
+    "visitor_id": "visitor-001",
+    "items": { "helmet": "pass", "vest": "pass" },
+    "overall": "pass",
+    "confidence": 0.9,
+    "snapshot_path": "/data/snap/sess-20260902142540-mechdog_a-8be84138/ppe.jpg"
+  }
+}

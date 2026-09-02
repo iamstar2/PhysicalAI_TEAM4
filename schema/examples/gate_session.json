@@ -1,0 +1,14 @@
+{
+  "ver": 1,
+  "msg_id": "ef65d51b606f4dd4931cc311e767b5bb",
+  "ts": "2026-09-02T14:25:40.544340+09:00",
+  "src": "mechdog_a",
+  "session_id": "sess-20260902142540-mechdog_a-8be84138",
+  "payload": {
+    "msg_type": "gate.session",
+    "visitor_id": "visitor-001",
+    "face_result": "authorized",
+    "ppe_result": "pass",
+    "handoff_to": "mechdog_b"
+  }
+}

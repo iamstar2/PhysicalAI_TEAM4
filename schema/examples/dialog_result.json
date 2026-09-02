@@ -1,0 +1,14 @@
+{
+  "ver": 1,
+  "msg_id": "f6504a1322424feb8e3a41aca1c254b1",
+  "ts": "2026-09-02T14:25:40.545846+09:00",
+  "src": "mechdog_b",
+  "session_id": "sess-20260902142540-mechdog_a-8be84138",
+  "payload": {
+    "msg_type": "dialog.result",
+    "destination": "meeting_room_1",
+    "purpose": "방문 미팅",
+    "confidence": 0.88,
+    "retry_count": 0
+  }
+}

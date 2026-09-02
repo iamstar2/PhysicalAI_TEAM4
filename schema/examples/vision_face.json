@@ -1,0 +1,15 @@
+{
+  "ver": 1,
+  "msg_id": "10a575726c554c528c55d4161bdadc55",
+  "ts": "2026-09-02T14:25:40.542117+09:00",
+  "src": "mechdog_a",
+  "session_id": "sess-20260902142540-mechdog_a-8be84138",
+  "payload": {
+    "msg_type": "vision.face",
+    "visitor_id": "visitor-001",
+    "result": "authorized",
+    "confidence": 0.93,
+    "similarity": 0.81,
+    "snapshot_path": "/data/snap/sess-20260902142540-mechdog_a-8be84138/face.jpg"
+  }
+}

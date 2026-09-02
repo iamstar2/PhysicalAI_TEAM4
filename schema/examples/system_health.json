@@ -1,0 +1,13 @@
+{
+  "ver": 1,
+  "msg_id": "90b8a7b41aac4ae1a839425c24d7a346",
+  "ts": "2026-09-02T14:25:53.104411+09:00",
+  "src": "mechdog_a",
+  "session_id": "system",
+  "payload": {
+    "msg_type": "system.health",
+    "node": "mechdog_a",
+    "state": "ready",
+    "detail": null
+  }
+}

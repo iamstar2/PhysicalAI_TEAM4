@@ -1,7 +1,11 @@
 # 프로젝트 문서(5. Docker 구성) 기준 6개 컨테이너 스니펫.
 # vision-service / dialog-service / escort-service / security-dashboard 는
-# 각자 팀원 디렉터리에 Dockerfile.example을 복사해 만든 Dockerfile로 빌드한다고 가정.
+# 각자 팀원 디렉터리에서 자기 코드/의존성으로 빌드한다고 가정.
 # 실제 경로(build.context)는 팀 저장소 구조에 맞게 바꿀 것.
+#
+# 참고: 메시지 포맷은 schema/mechdog_messages.schema.json (JSON Schema)이 유일한 스펙이라
+# 컨테이너에 별도로 설치할 공용 패키지가 없다. 각자 서비스 코드에서 이 스펙에 맞는 JSON을
+# 만들어 MQTT_HOST/MQTT_PORT(및 필요 시 MQTT_USER/MQTT_PASS)로 붙으면 된다.
 
 services:
   mosquitto:
