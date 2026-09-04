@@ -1,21 +1,21 @@
 #include "mech_base_types.h"
 #include "HW_MechDog.h"
 
-//创建MechDog对象
+//MechDog 객체 생성
 MechDog mechdog;
-//创建发光超声波传感器对象
+//발광 초음파 센서 객체 생성
 UltrasoundSonar ult;
-//创建LED点阵模块对象
+//LED 도트 매트릭스 모듈 객체 생성
 WMMatrixLed tm(32,33);
-//超声波测量距离
+//초음파로 측정한 거리
 uint16_t distance = 0;
 
 void setup() {
   Serial.begin(115200);
-  mechdog.MechDog_init(); //初始化MechDog
-  ult.Ultrasound_init(); //初始化发光超声波
-  
-  tm.setBrightness(4); //设置亮度
+  mechdog.MechDog_init(); //MechDog 초기화
+  ult.Ultrasound_init(); //발광 초음파 초기화
+
+  tm.setBrightness(4); //밝기 설정
   delay(1000);
 }
 
@@ -23,25 +23,25 @@ void loop() {
   userTask();
 }
 
-/* 用户函数 */
+/* 사용자 함수 */
 void userTask(){
-  //获取发光超声波测量的距离
+  //발광 초음파로 측정한 거리 가져오기
   distance = ult.getDistance();
-  //点阵模块显示距离
-  tm.showNum((float)distance,0); 
+  //도트 매트릭스 모듈에 거리 표시
+  tm.showNum((float)distance,0);
   //Serial.println(distance);
-  //若距离小于15mm
+  //거리가 15mm보다 작으면
   if(distance <= 15){
-    //发光超声波设置颜色函数
-    //参数1：设置的灯，0为2个灯都设置，1为设置灯1,2为设置灯2；
-    //参数2、3、4：对应红、绿、蓝3种颜色值
-    ult.setRGB(0,0xff,0x00,0x00); //设置为红色
+    //발광 초음파 색상 설정 함수
+    //매개변수1: 설정할 LED, 0이면 두 LED 모두 설정, 1이면 LED 1 설정, 2이면 LED 2 설정;
+    //매개변수2,3,4: 각각 빨강, 초록, 파랑 색상 값에 해당
+    ult.setRGB(0,0xff,0x00,0x00); //빨간색으로 설정
    }
    else{
     if(distance > 30){
-      ult.setRGB(0,0x00,0x00,0x99); //设置为蓝色
+      ult.setRGB(0,0x00,0x00,0x99); //파란색으로 설정
     }else{
-      ult.setRGB(0,0xfd,0xd0,0x00); //设置为黄色
+      ult.setRGB(0,0xfd,0xd0,0x00); //노란색으로 설정
     }
   }
   delay(100);

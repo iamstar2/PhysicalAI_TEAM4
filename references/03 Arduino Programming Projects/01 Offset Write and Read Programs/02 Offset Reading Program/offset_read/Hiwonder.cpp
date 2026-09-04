@@ -8,7 +8,7 @@
 TwoWire IIC1 = TwoWire(0);
 TwoWire IIC2 = TwoWire(1);
 
-bool wireWriteByte(TwoWire *iic, uint8_t addr, uint8_t val){ //写字节
+bool wireWriteByte(TwoWire *iic, uint8_t addr, uint8_t val){ //바이트 쓰기
   iic->beginTransmission(addr);
   iic->write(val);
     if(iic->endTransmission() != 0 ) 
@@ -18,7 +18,7 @@ bool wireWriteByte(TwoWire *iic, uint8_t addr, uint8_t val){ //写字节
     return true;
 }
 
-bool wireWriteDataArray(TwoWire *iic, uint8_t addr, uint8_t reg,uint8_t *val,unsigned int len){ //写多个字节
+bool wireWriteDataArray(TwoWire *iic, uint8_t addr, uint8_t reg,uint8_t *val,unsigned int len){ //여러 바이트 쓰기
   unsigned int i;
 
   iic->beginTransmission(addr);
@@ -34,7 +34,7 @@ bool wireWriteDataArray(TwoWire *iic, uint8_t addr, uint8_t reg,uint8_t *val,uns
   return true;
 }
 
-int wireReadDataArray(TwoWire *iic, uint8_t addr, uint8_t reg, uint8_t *val, unsigned int len){ //读指定长度字节
+int wireReadDataArray(TwoWire *iic, uint8_t addr, uint8_t reg, uint8_t *val, unsigned int len){ //지정한 길이의 바이트 읽기
   unsigned char i = 0;  
   if (!wireWriteByte(iic,addr, reg)) 
   {
@@ -53,7 +53,7 @@ int wireReadDataArray(TwoWire *iic, uint8_t addr, uint8_t reg, uint8_t *val, uns
   return i;
 }
 
-bool wireWriteWords(TwoWire *iic, uint8_t addr, uint8_t reg, uint8_t idNum, const char *words){ //写入ID及字符串
+bool wireWriteWords(TwoWire *iic, uint8_t addr, uint8_t reg, uint8_t idNum, const char *words){ //ID 및 문자열 쓰기
   iic->beginTransmission(ASR_I2C_ADDR);
   iic->write(ASR_ADD_WORDS_ADDR);
   iic->write(idNum);
@@ -89,26 +89,26 @@ void startMain(CallbackFunc ncb){
 
 
 /*PowerBuzzer*/
-void PowerBuzzer::Buzzer_init(void){  //蜂鸣器初始化
+void PowerBuzzer::Buzzer_init(void){  //부저 초기화
   ledcSetup(Buzzer_channel,Buzzer_freq,10);
-  ledcAttachPin(Buzzer_Pin, Buzzer_channel); 
-  
-  xTaskCreate(             //任务初始化
-    Buzzer_Task,          // 任务函数
-    "Task Buzzer",       // 任务名称
-    1024,           // 任务堆栈大小
-    this,           // 传递给任务函数的参数
-    1,              // 任务优先级
-    &Battery_TaskHandel    // 任务句柄
+  ledcAttachPin(Buzzer_Pin, Buzzer_channel);
+
+  xTaskCreate(             //태스크 초기화
+    Buzzer_Task,          // 태스크 함수
+    "Task Buzzer",       // 태스크 이름
+    1024,           // 태스크 스택 크기
+    this,           // 태스크 함수에 전달되는 매개변수
+    1,              // 태스크 우선순위
+    &Battery_TaskHandel    // 태스크 핸들
   );
 
 }
 
-void PowerBuzzer::disableLowPowerAlarm(void){  //关闭低压警报
+void PowerBuzzer::disableLowPowerAlarm(void){  //저전압 경보 끄기
   bt_open = false;
 }
 
-int PowerBuzzer::readBattery(void){  //读取电池电量
+int PowerBuzzer::readBattery(void){  //배터리 전량 읽기
   BatteryValue = analogRead(34) * 3.6;
   if(bt_open){
     if(BatteryValue < 7000) bt_state = true;
@@ -116,7 +116,7 @@ int PowerBuzzer::readBattery(void){  //读取电池电量
   return BatteryValue;
 }
 
-void PowerBuzzer::Buzzer_Task(void *p){  //电压监测+蜂鸣器任务
+void PowerBuzzer::Buzzer_Task(void *p){  //전압 모니터링 + 부저 태스크
   PowerBuzzer *self = static_cast<PowerBuzzer*>(p);
   while(1){
     self->readBattery();
@@ -145,13 +145,13 @@ void PowerBuzzer::Buzzer_Task(void *p){  //电压监测+蜂鸣器任务
   }
 }
 
-void PowerBuzzer::playTone(int duty, int btime, bool state){    //设置鸣响音调
+void PowerBuzzer::playTone(int duty, int btime, bool state){    //울림 음조 설정
   userTone = true;
   duty_value = duty;
   time_value = btime;
   if(state) delay(btime);
 }
-void PowerBuzzer::setVolume(int freq){    //设置音量[0,1000]
+void PowerBuzzer::setVolume(int freq){    //음량 설정 [0,1000]
   Buzzer_freq = freq;
   ledcSetup(Buzzer_channel,Buzzer_freq,10);
 }
@@ -235,14 +235,14 @@ void UltrasoundSonar::Ultrasound_init(void){
   IIC1.begin(SDA1, SCL1);
 }
 
-/* 
-  设置灯的颜色
-	参数1：0表示两边，1表示左边，2表示右边
-	参数2：颜色的rgb比例值，以元组形式传入,范围0-255, 依次为r， g， b
+/*
+  램프 색상 설정
+	매개변수1: 0은 양쪽, 1은 왼쪽, 2는 오른쪽을 의미
+	매개변수2: 색상의 RGB 비율 값, 튜플 형태로 전달, 범위 0-255, 순서대로 r, g, b
 */
 void UltrasoundSonar::setRGB(uint8_t index, uint8_t r, uint8_t g, uint8_t b){
   uint8_t RGB[3]; 
-  uint8_t value = RGB_WORK_SIMPLE_MODE; //普通模式
+  uint8_t value = RGB_WORK_SIMPLE_MODE; //일반 모드
   wireWriteDataArray(&IIC1, ULTRASOUND_I2C_ADDR, RGB_WORK_MODE,&value,1);
   if(index == 0){
     RGB[0] = r;RGB[1] = g;RGB[2] = b;//RGB1
@@ -254,14 +254,14 @@ void UltrasoundSonar::setRGB(uint8_t index, uint8_t r, uint8_t g, uint8_t b){
   }
 }
 
-/* 
-  呼吸灯模式
-  参数1：0表示两边的灯，1表示左边,2表示右边
-  参数2：颜色通道， 0表示r，1表示g， 2表示b
-  参数3：颜色变化周期，单位100ms，例如设置3000ms周期，该参数设置为30
+/*
+  브리딩(호흡) 모드
+  매개변수1: 0은 양쪽 램프, 1은 왼쪽, 2는 오른쪽을 의미
+  매개변수2: 색상 채널, 0은 r, 1은 g, 2는 b를 의미
+  매개변수3: 색상 변화 주기, 단위 100ms, 예를 들어 3000ms 주기로 설정하려면 이 값을 30으로 설정
 */
-void UltrasoundSonar::setBreathing(uint8_t index, uint8_t rgb, uint8_t cycle){ 
-  uint8_t value = RGB_WORK_BREATHING_MODE; //呼吸灯模式 
+void UltrasoundSonar::setBreathing(uint8_t index, uint8_t rgb, uint8_t cycle){
+  uint8_t value = RGB_WORK_BREATHING_MODE; //브리딩(호흡) 모드
   wireWriteDataArray(&IIC1, ULTRASOUND_I2C_ADDR, RGB_WORK_MODE, &value, 1);
   if(index == 0){
     wireWriteDataArray(&IIC1, ULTRASOUND_I2C_ADDR, RGB1_R_BREATHING_CYCLE + rgb, &cycle,1); 
@@ -271,15 +271,15 @@ void UltrasoundSonar::setBreathing(uint8_t index, uint8_t rgb, uint8_t cycle){
   }
 }
 
-uint16_t UltrasoundSonar::getDistance(){ //获取超声波测得的距离，单位mm
+uint16_t UltrasoundSonar::getDistance(){ //초음파로 측정한 거리 가져오기, 단위 mm
   uint16_t distance;
   int filter_sum = 0;
   wireReadDataArray(&IIC1, ULTRASOUND_I2C_ADDR, DISTANCE_ADDR,(uint8_t *)&distance,2);
   if(distance == DISTANCE_ERRO) distance = 5000;
-  filter_buf[FILTER_N] = distance;     //读取超声波测值
-  
-  for(int i = 0; i < FILTER_N; i++) {    
-    filter_buf[i] = filter_buf[i + 1];               // 所有数据左移，低位仍掉
+  filter_buf[FILTER_N] = distance;     //초음파 측정값 읽기
+
+  for(int i = 0; i < FILTER_N; i++) {
+    filter_buf[i] = filter_buf[i + 1];               // 모든 데이터를 왼쪽으로 이동, 최하위 값은 버림
     filter_sum += filter_buf[i];
   }
   return (uint16_t)(filter_sum / FILTER_N) / 10;

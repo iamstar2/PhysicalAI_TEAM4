@@ -7,7 +7,7 @@ MechDog mechdog;
 
 void setup() {
   Serial.begin(115200);
-  mechdog.MechDog_init(); //初始化MechDog
+  mechdog.MechDog_init(); //MechDog 초기화
   delay(1000);
 }
 
@@ -15,14 +15,14 @@ void loop() {
   userTask();
 }
 
-/* 用户函数 */
+/* 사용자 함수 */
 void userTask(){
-  /* 
-      set_gait_params()函数
-      设置步态参数，参数内容如下：
-      参数1：脚尖离地的时间；
-      参数2：脚尖接触地面的时间；
-      参数3：抬腿的高度。
+  /*
+      set_gait_params() 함수
+      보행 파라미터를 설정합니다. 매개변수 내용은 다음과 같습니다:
+      매개변수1: 발끝이 지면에서 떨어져 있는 시간;
+      매개변수2: 발끝이 지면에 닿아 있는 시간;
+      매개변수3: 다리를 들어올리는 높이.
   */
   switch (step) {
     case 0:

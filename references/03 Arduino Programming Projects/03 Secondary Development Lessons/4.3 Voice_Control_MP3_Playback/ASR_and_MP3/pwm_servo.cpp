@@ -8,16 +8,16 @@
 #define SERVO_OFFSET_KEY_PREFIX "offset_s"
 
 typedef struct {
-  uint8_t pin_id;          /**< ESP32 GPIO pin ID for the servo. ->舵机引脚*/
-  int current_pulsewidth;  /**< Current pulse width of the servo. ->当前脉宽*/
-  int actual_pulsewidth;   /**< Actual pulse width of the servo. --实际运行脉宽*/
-  bool pulsewidth_changed; /**< Flag indicating whether the pulse width has changed. ->脉宽变化标志位*/
-  bool is_running;         /**< Flag indicating whether the servo is running. ->舵机是否处在运行中的标志位*/
-  int target_pulsewidth;   /**< Target pulse width of the servo. ->目标脉宽*/
-  int offset;              /**< Offset value for the servo. ->舵机偏差*/
-  float pulsewidth_inc;    /**< Increment of pulse width per cycle (20ms). ->每周期脉宽的增量*/
-  uint32_t duration;       /**< Duration of the servo movement. Unit: ms ->舵机运行时间*/
-  int inc_num;             /**< Number of increments of pulse width. ->脉宽增量数*/
+  uint8_t pin_id;          /**< ESP32 GPIO pin ID for the servo. ->서보모터 핀 번호*/
+  int current_pulsewidth;  /**< Current pulse width of the servo. ->현재 펄스 폭*/
+  int actual_pulsewidth;   /**< Actual pulse width of the servo. --실제 동작 펄스 폭*/
+  bool pulsewidth_changed; /**< Flag indicating whether the pulse width has changed. ->펄스 폭 변경 플래그*/
+  bool is_running;         /**< Flag indicating whether the servo is running. ->서보모터 동작 중 여부 플래그*/
+  int target_pulsewidth;   /**< Target pulse width of the servo. ->목표 펄스 폭*/
+  int offset;              /**< Offset value for the servo. ->서보모터 오프셋*/
+  float pulsewidth_inc;    /**< Increment of pulse width per cycle (20ms). ->매 주기의 펄스 폭 증가량*/
+  uint32_t duration;       /**< Duration of the servo movement. Unit: ms ->서보모터 동작 시간*/
+  int inc_num;             /**< Number of increments of pulse width. ->펄스 폭 증가 횟수*/
 
 } pwm_servo_obj_t;
 
@@ -49,7 +49,7 @@ void pwm_servo_init(void) {
 
   for (int i = 0; i < 10; ++i) {
     sprintf(nvs_key, SERVO_OFFSET_KEY_PREFIX "%d", i + 1);
-    pwm_servos[i].offset = nvs.getInt(nvs_key, 0);  //读取偏差
+    pwm_servos[i].offset = nvs.getInt(nvs_key, 0);  //오프셋 읽기
   }
   nvs.end();
 
@@ -163,23 +163,23 @@ int pwm_servo_set_position(uint32_t servo_index, uint32_t pulsewidth, uint32_t d
   duration = duration < 20 ? 20 : (duration > 30000 ? 30000 : duration);  // Limit duration to 20ms to 30s
   // pulsewidth = pulsewidth > 2500 ? 2500 : (pulsewidth < 500 ? 500 : pulsewidth); // Limit pulsewidth to 500us to 2500us
   switch (servo_index) {
-    case 0:  //左边大腿
+    case 0:  //왼쪽 위쪽 다리
     case 2:
       pulsewidth = pulsewidth > L_MAX_0 ? L_MAX_0 : pulsewidth;
       pulsewidth = pulsewidth < L_MIN_0 ? L_MIN_0 : pulsewidth;
       break;
-    case 1:  //左边小腿
+    case 1:  //왼쪽 아래쪽 다리
     case 3:
       pulsewidth = pulsewidth > L_MAX_1 ? L_MAX_1 : pulsewidth;
       pulsewidth = pulsewidth < L_MIN_1 ? L_MIN_1 : pulsewidth;
       break;
-                                                                                                                                                      
-    case 4:  //右边大腿
+
+    case 4:  //오른쪽 위쪽 다리
     case 6:
       pulsewidth = pulsewidth > R_MAX_0 ? R_MAX_0 : pulsewidth;
       pulsewidth = pulsewidth < R_MIN_0 ? R_MIN_0 : pulsewidth;
       break;
-    case 5:  //右边小腿
+    case 5:  //오른쪽 아래쪽 다리
     case 7:
       pulsewidth = pulsewidth > R_MAX_1 ? R_MAX_1 : pulsewidth;
       pulsewidth = pulsewidth < R_MIN_1 ? R_MIN_1 : pulsewidth;
@@ -235,7 +235,7 @@ int pwm_servo_position(int8_t servo_id,int position,int duration_ms) {
     return -1;
   }
   if (position == 0 && duration_ms == 0){
-    return pwm_servos[servo_id - 1].current_pulsewidth;//若只有一个参数则返回舵机脉宽。
+    return pwm_servos[servo_id - 1].current_pulsewidth;//매개변수가 하나뿐이면 서보모터 펄스 폭을 반환함.
   }else{
     int duration = 0;
     if (duration_ms != 0){
@@ -261,7 +261,7 @@ int get_pwm_servo_offset(int8_t servo_id) {
   if (servo_id < 1 || servo_id > 10){
     return -1;
   }
-  return pwm_servos[servo_id - 1].offset; //返回舵机偏差
+  return pwm_servos[servo_id - 1].offset; //서보모터 오프셋 반환
 }
 int set_pwm_servo_offset(int8_t servo_id,int new_offset) {
   if (servo_id < 1 || servo_id > 10){
@@ -270,7 +270,7 @@ int set_pwm_servo_offset(int8_t servo_id,int new_offset) {
   if(new_offset > 125 || new_offset < -125){
     return -1;
   }
-  pwm_servo_set_offset(servo_id - 1, new_offset); //设置偏差
+  pwm_servo_set_offset(servo_id - 1, new_offset); //오프셋 설정
 }
 
 /** 

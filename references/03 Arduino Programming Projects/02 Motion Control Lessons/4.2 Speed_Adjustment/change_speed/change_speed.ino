@@ -11,9 +11,9 @@ Button btn;
 
 void setup() {
   Serial.begin(115200);
-  mechdog.MechDog_init(); //初始化MechDog
-  
-  btn.Button_init(1); //初始化按键，参数1表示为按键功能
+  mechdog.MechDog_init(); //MechDog 초기화
+
+  btn.Button_init(1); //버튼 초기화, 매개변수 1은 버튼 기능을 나타냄
   btn.Clicked(on_button1_clicked);
   delay(1000);
 }
@@ -22,12 +22,12 @@ void loop() {
   userTask();
 }
 
-/* 用户函数 */
+/* 사용자 함수 */
 void userTask(){
-  /* 
-     move()函数
-     参数1：步幅（单位mm）（正值为向前，负值为向后）；
-     参数2：转弯角度（单位：度），正值为左转，负值为右转
+  /*
+     move() 함수
+     매개변수1: 보폭(단위 mm)(양수는 전진, 음수는 후진);
+     매개변수2: 회전 각도(단위: 도), 양수는 좌회전, 음수는 우회전
   */
   if(enter_flag == 1){
     switch (step) {
@@ -62,7 +62,7 @@ void userTask(){
   delay(100);
 }
 
-/* 按键回调函数 */
+/* 버튼 콜백 함수 */
 void on_button1_clicked(){
   enter_flag = 1;
 }

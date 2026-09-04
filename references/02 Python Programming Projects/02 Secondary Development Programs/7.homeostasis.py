@@ -3,35 +3,35 @@ import time
 import Hiwonder_IIC
 from HW_MechDog import MechDog
 
-# 初始化MechDog对象
+# MechDog 객체 초기화
 mechdog = MechDog()
 
-#初始化发光超声波对象
+# 발광 초음파 센서 객체 초기화
 i2c1 = Hiwonder_IIC.IIC(1)
 i2csonar = Hiwonder_IIC.I2CSonar(i2c1)
-# 创建蜂鸣器对象
+# 부저 객체 생성
 beep = Hiwonder.Buzzer()
 
-# 设置MechDog初始姿态
+# MechDog 초기 자세 설정
 mechdog.set_default_pose()
 time.sleep(1)
 
 
-# 主函数
+# 메인 함수
 def main():
-  # 发光超声波设置颜色函数
-  # 参数1：设置的灯，0为2个灯都设置，1为设置灯1,2为设置灯2；
-  # 参数2、3、4：对应红、绿、蓝3种颜色值
+  # 발광 초음파 색상 설정 함수
+  # 매개변수1: 설정할 램프, 0은 두 램프 모두 설정, 1은 램프1 설정, 2는 램프2 설정;
+  # 매개변수2, 3, 4: 각각 빨강, 초록, 파랑 3가지 색상 값에 해당
   i2csonar.setRGB(0,0xff,0xcc,0x33)
-  # 开启自平衡状态
+  # 자동 균형(자세 안정화) 상태 켜기
   mechdog.homeostasis(True)
   time.sleep(2)
-  # 检测是否还在自平衡状态，当退出自平衡状态时即退出该循环
+  # 자동 균형 상태인지 확인하고, 자동 균형 상태를 벗어나면 이 루프를 종료한다
   while mechdog.read_homeostasis_status():
     time.sleep(0.1)
   i2csonar.setRGB(0,0x33,0x33,0xff)
   beep.playTone(800,100,True)
-  
-# 执行主函数
+
+# 메인 함수 실행
 main()
 

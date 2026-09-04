@@ -2,21 +2,21 @@ import Hiwonder
 import time
 from HW_MechDog import MechDog
 
-# 按键按下标志位
+# 버튼 눌림 플래그
 enter_flag = 0
-# 速度初始值
+# 속도 초기값
 speed = 40
 
-# 初始化MechDog对象
+# MechDog 객체 초기화
 mechdog = MechDog()
-# 按键对象
+# 버튼 객체
 button1 = Hiwonder.Button(1)
 
-# 延时函数，参数为延时的时间（单位：秒）
+# 지연 함수, 매개변수는 지연 시간(단위: 초)
 time.sleep(1)
 
 
-# 主函数
+# 메인 함수
 def main():
   global enter_flag
   while True:
@@ -33,20 +33,20 @@ def main():
         mechdog.move(speed,0)
         time.sleep(10)
         speed = 40
-      # 停止
+      # 정지
       mechdog.move(0,0)
       enter_flag = 0
-      
+
     time.sleep(0.05)
 
-# 按键短按调用的函数
+# 버튼 짧게 눌렀을 때 호출되는 함수
 def on_button1_clicked():
   global enter_flag
   enter_flag = 1
 
-# 注册按键短按调用函数
+# 버튼 짧게 눌렀을 때 호출할 함수 등록
 button1.Clicked(on_button1_clicked)
 
-# 执行主函数
+# 메인 함수 실행
 main()
 

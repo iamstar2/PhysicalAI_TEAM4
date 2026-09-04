@@ -22,8 +22,8 @@ extern int ax_offset, ay_offset, az_offset, gx_offset, gy_offset, gz_offset;
 extern float radianX;
 extern float radianY;
 extern float radianZ;
-extern float radianX_last; //最终获得的X轴倾角
-extern float radianY_last; //最终获得的Y轴倾角
+extern float radianX_last; //최종적으로 얻은 X축 기울기
+extern float radianY_last; //최종적으로 얻은 Y축 기울기
 
 class MechDog:public quad_kinematics, public PowerBuzzer{
   private:

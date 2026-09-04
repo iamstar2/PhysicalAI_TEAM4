@@ -11,9 +11,9 @@ Button btn;
 
 void setup() {
   Serial.begin(115200);
-  mechdog.MechDog_init(); //初始化MechDog
-  
-  btn.Button_init(2); //初始化按键，参数2表示为触摸传感器功能
+  mechdog.MechDog_init(); //MechDog 초기화
+
+  btn.Button_init(2); //버튼 초기화, 매개변수 2는 터치 센서 기능을 나타냄
   btn.Clicked(on_button1_clicked);
   delay(1000);
 }
@@ -22,24 +22,24 @@ void loop() {
   userTask();
 }
 
-/* 用户函数 */
+/* 사용자 함수 */
 void userTask(){
   if(enter_flag == 1){
     switch (step) {
       case 0:
-        //执行默认动作组：坐下
+        //기본 동작 그룹 실행: 앉기
         mechdog.action_run("sit_dowm");
         delay(1500);
         step++;
         break;
       case 1:
-        //执行默认动作组：趴下
+        //기본 동작 그룹 실행: 엎드리기
         mechdog.action_run("go_prone");
         delay(1500);
         step++;
         break;
       case 2:
-        //执行默认动作组：站立
+        //기본 동작 그룹 실행: 서기
         mechdog.action_run("stand_four_legs");
         delay(1500);
         step = 0;
@@ -50,7 +50,7 @@ void userTask(){
   delay(100);
 }
 
-/* 按键回调函数 */
+/* 버튼 콜백 함수 */
 void on_button1_clicked(){
   enter_flag = 1;
 }

@@ -2,26 +2,26 @@ import Hiwonder
 import time
 from HW_MechDog import MechDog
 
-# 初始化MechDog对象
+# MechDog 객체 초기화
 mechdog = MechDog()
 
-# 主函数
+# 메인 함수
 def main():
-  # 延时函数，参数为延时的时间（单位：秒）
+  # 지연 함수, 매개변수는 지연 시간(단위: 초)
   time.sleep(2)
-  # move()函数
-  # 参数1：步幅（单位mm）（正值为向前，负值为向后）；
-  # 参数2：转弯角度（单位：度），正值为左转，负值为右转
+  # move() 함수
+  # 매개변수1: 보폭(단위 mm)(양수는 전진, 음수는 후진);
+  # 매개변수2: 회전 각도(단위: 도), 양수는 좌회전, 음수는 우회전
   mechdog.move(80,0)
   time.sleep(5)
   mechdog.move(0,0)
   time.sleep(2)
   mechdog.move(-50,0)
   time.sleep(5)
-  # 停止
+  # 정지
   mechdog.move(0,0)
   time.sleep(2)
 
-# 运行主函数
+# 메인 함수 실행
 main()
 

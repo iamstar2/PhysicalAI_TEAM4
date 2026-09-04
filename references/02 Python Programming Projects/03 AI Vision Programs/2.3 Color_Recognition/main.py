@@ -4,7 +4,7 @@ import Hiwonder_IIC
 from HW_MechDog import MechDog
 
 '''
-  颜色识别
+  색상 인식
 '''
 
 iic2 = Hiwonder_IIC.IIC(2)

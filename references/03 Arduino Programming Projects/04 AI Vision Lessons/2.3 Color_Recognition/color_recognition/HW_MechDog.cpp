@@ -20,8 +20,8 @@ int ax_offset, ay_offset, az_offset, gx_offset, gy_offset, gz_offset;
 float radianX;
 float radianY;
 float radianZ;
-float radianX_last; //最终获得的X轴倾角
-float radianY_last; //最终获得的Y轴倾角
+float radianX_last; //최종적으로 얻은 X축 기울기
+float radianY_last; //최종적으로 얻은 Y축 기울기
 
 mech_point_t default_pose[4] = {
   {59.25, 46.0, -80}, {-71.25, 46.0, -80}, {59.25, -46.0, -80}, {-71.25, -46.0, -80}
@@ -259,10 +259,10 @@ void MechDog::homeostasis(bool onoff){
     open_imu = 1;
     IIC1.begin(SDA1,SCL1);
     accelgyro.initialize();
-    accelgyro.setFullScaleGyroRange(3); //设定角速度量程
-    accelgyro.setFullScaleAccelRange(1); //设定加速度量程
+    accelgyro.setFullScaleGyroRange(3); //각속도 측정 범위 설정
+    accelgyro.setFullScaleAccelRange(1); //가속도 측정 범위 설정
     delay(200);
-    accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);  //获取当前各轴数据以校准
+    accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);  //보정을 위해 현재 각 축의 데이터를 가져옴
     ax_offset = ax;  
     ay_offset = ay;  
     az_offset = az - 8192;  
@@ -335,27 +335,27 @@ void MechDog::balancing_Task(void *p){
 
 void read_angle(){
   accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-  ax0 = ((float)(ax)) * 0.3 + ax0 * 0.7;  //对读取到的值进行滤波
+  ax0 = ((float)(ax)) * 0.3 + ax0 * 0.7;  //읽은 값에 필터링 적용
   ay0 = ((float)(ay)) * 0.3 + ay0 * 0.7;
   az0 = ((float)(az)) * 0.3 + az0 * 0.7;
-  ax1 = (ax0 - ax_offset) /  8192.0;  // 校正，并转为重力加速度的倍数
+  ax1 = (ax0 - ax_offset) /  8192.0;  // 보정 후 중력 가속도의 배수로 변환
   ay1 = (ay0 - ay_offset) /  8192.0;
   az1 = (az0 - az_offset) /  8192.0;
 
-  gx0 = ((float)(gx)) * 0.3 + gx0 * 0.7;  //对读取到的角速度的值进行滤波
+  gx0 = ((float)(gx)) * 0.3 + gx0 * 0.7;  //읽은 각속도 값에 필터링 적용
   gy0 = ((float)(gy)) * 0.3 + gy0 * 0.7;
   gz0 = ((float)(gz)) * 0.3 + gz0 * 0.7;
-  gx1 = (gx0 - gx_offset);  //校正角速度
+  gx1 = (gx0 - gx_offset);  //각속도 보정
   gy1 = (gy0 - gy_offset);
   gz1 = (gz0 - gz_offset);
 
 
-  //互补计算x轴倾角
+  //상보 필터로 X축 기울기 계산
   radianX = atan2(ay1, az1);
   radianX_last = radianX * 180.0 / 3.1415926; //
-  
-  //互补计算y轴倾角
+
+  //상보 필터로 Y축 기울기 계산
   radianY = atan2(ax1, az1);
   radianY_last = -radianY * 180.0 / 3.1415926; //
-  
+
 }

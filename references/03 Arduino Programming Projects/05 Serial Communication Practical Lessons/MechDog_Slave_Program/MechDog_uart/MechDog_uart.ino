@@ -9,16 +9,16 @@ typedef struct Object{
 };
 extern MPU6050 accelgyro;
 
-MechDog mechdog; //创建MechDog对象
-UltrasoundSonar ult; //创建发光超声波对象
+MechDog mechdog; //MechDog 객체 생성
+UltrasoundSonar ult; //발광 초음파 객체 생성
 
 Object obj;
 
-HardwareSerial mySerial(1); //创建串口实例
+HardwareSerial mySerial(1); //시리얼 포트 인스턴스 생성
 
 mech_pose_t attitude[8] = {
-  {{10,0,0},{0,0,0}}, //重心前移姿态
-  {{-10,0,0},{0,0,0}}, //重心后移姿态
+  {{10,0,0},{0,0,0}}, //무게중심을 앞으로 이동한 자세
+  {{-10,0,0},{0,0,0}}, //무게중심을 뒤로 이동한 자세
   {{0,0,0},{1,0,0}}, //Roll +
   {{0,0,0},{-1,0,0}}, //Roll -
   {{0,0,0},{0,1,0}}, //Pitch +
@@ -29,19 +29,19 @@ mech_pose_t attitude[8] = {
 
 
 
-static void run_task(void *p); //动作运行任务
+static void run_task(void *p); //동작 실행 작업
 
 int8_t step = 0;
-int8_t avo_flg = -1; //避障标志位
-int8_t forward_flag = 1; //避障姿态切换标志位
-int8_t action_num = -1; //运动
-int8_t dir_flag = 1; //运动姿态切换标志位
-int8_t actions = 0; //动作组
-int8_t actions_flg = 0; //动作组运行标志位
-int8_t attitude_flg = 0; //姿态调节标志位
-int8_t homeostasis_flg = 0; //自平衡功能
+int8_t avo_flg = -1; //장애물 회피 플래그
+int8_t forward_flag = 1; //장애물 회피 자세 전환 플래그
+int8_t action_num = -1; //이동 동작
+int8_t dir_flag = 1; //이동 자세 전환 플래그
+int8_t actions = 0; //동작 그룹
+int8_t actions_flg = 0; //동작 그룹 실행 플래그
+int8_t attitude_flg = 0; //자세 조정 플래그
+int8_t homeostasis_flg = 0; //자동 균형(자세 안정화) 기능
 
-//姿态调节角度
+//자세 조정 각도
 int8_t Pitch_angle = 0;
 int8_t Roll_angle = 0;
 int8_t High_mm = 0;
@@ -49,32 +49,32 @@ int8_t High_mm = 0;
 int8_t rec_data[3];
 
 void setup() {
-  mySerial.begin(9600,SERIAL_8N1,rxPin,txPin); //初始化串口
+  mySerial.begin(9600,SERIAL_8N1,rxPin,txPin); //시리얼 포트 초기화
   obj.mechdog = &mechdog;
   obj.ult = &ult;
-  Project_init(); //初始化MechDog和发光超声波模块
+  Project_init(); //MechDog 및 발광 초음파 모듈 초기화
   delay(100);
 }
 
 void loop() {
   uint8_t index = 0;
   while (mySerial.available() > 0) {
-    String cmd = mySerial.readString(); //读取串口数据
-    if(cmd.startsWith("CMD") && cmd.endsWith("$")){ //进行数据校验
-      cmd = cmd.substring(cmd.indexOf('|') + 1,cmd.indexOf('$')); 
+    String cmd = mySerial.readString(); //시리얼 데이터 읽기
+    if(cmd.startsWith("CMD") && cmd.endsWith("$")){ //데이터 유효성 검사
+      cmd = cmd.substring(cmd.indexOf('|') + 1,cmd.indexOf('$'));
       while(cmd.indexOf("|") != -1){
-        rec_data[index] = cmd.substring(0, cmd.indexOf('|')).toInt(); //提取数据字符串并转换为int类型
+        rec_data[index] = cmd.substring(0, cmd.indexOf('|')).toInt(); //데이터 문자열을 추출하여 int형으로 변환
         cmd = cmd.substring(cmd.indexOf('|') + 1);
         index++;
       }
       switch(rec_data[0]){
-        case 1: //姿态调节
+        case 1: //자세 조정
           if(index == 2 && rec_data[1] == 5){
             mechdog.set_default_pose();
             vTaskDelay(1000);
           }else if(index == 3){
             switch(rec_data[1]){
-              case 1: //Pitch调节
+              case 1: //Pitch 조정
                 if(abs(rec_data[2]) == 1){
                   if(rec_data[2] == 1 && Pitch_angle < 17){
                     Pitch_angle++;
@@ -85,7 +85,7 @@ void loop() {
                   }
                 }
                 break;
-              case 2: //Roll调节
+              case 2: //Roll 조정
                 if(abs(rec_data[2]) == 1){
                   if(rec_data[2] == 1 && Roll_angle < 17){
                     Roll_angle++;
@@ -96,14 +96,14 @@ void loop() {
                   }
                 }
                 break;
-              case 3: //自平衡
+              case 3: //자동 균형
                 if(rec_data[2] == 1){
                   homeostasis_flg = 1;
                 }else{
                   homeostasis_flg = 0;
                 }
                 break;
-              case 4: //Roll调节
+              case 4: //Roll 조정
                 if(abs(rec_data[2]) == 1){
                   if(rec_data[2] == 1 && High_mm < 15){
                     High_mm++;
@@ -118,7 +118,7 @@ void loop() {
           }
           break;
 
-        case 2: //动作组调用
+        case 2: //동작 그룹 호출
           if(index == 3){
             if(rec_data[1] == 1){
               actions_flg = 1;
@@ -130,7 +130,7 @@ void loop() {
           }
           break;
 
-        case 3: //运动控制
+        case 3: //이동 제어
           if(index == 2){
             action_num = rec_data[1];
             if(action_num < 6 && dir_flag != 1){
@@ -143,9 +143,9 @@ void loop() {
           }
           break;
 
-        case 4: //超声波数据
+        case 4: //초음파 데이터
           if(index == 2 && rec_data[1] == 1){
-            mySerial.printf("CMD|%d|%d|$",rec_data[0],ult.getDistance()*10); //读取超声波数据
+            mySerial.printf("CMD|%d|%d|$",rec_data[0],ult.getDistance()*10); //초음파 데이터 읽기
           }else if(index == 3){
             if(rec_data[1] == 2){
               if(rec_data[2] == 1){
@@ -157,18 +157,18 @@ void loop() {
           }
           break;
 
-        case 5: //IMU数据
+        case 5: //IMU 데이터
           if(index == 1){
-            IMU_init(); //初始化IMU
+            IMU_init(); //IMU 초기화
             delay(100);
-            read_angle(); //读取取PITCH、ROLL度数
+            read_angle(); //PITCH, ROLL 각도 읽기
             mySerial.printf("CMD|%d|%f|%f|$",rec_data[0],radianY_last,radianX_last);
           }
           break;
 
-        case 6: //电池电量
+        case 6: //배터리 잔량
           if(index == 1){
-            mySerial.printf("CMD|%d|%d|$",rec_data[0],mechdog.readBattery()); //读取电池电量
+            mySerial.printf("CMD|%d|%d|$",rec_data[0],mechdog.readBattery()); //배터리 잔량 읽기
           }
           break;
       }
@@ -180,21 +180,21 @@ void loop() {
 void IMU_init(){
   IIC1.begin(SDA1,SCL1);
   accelgyro.initialize();
-  accelgyro.setFullScaleGyroRange(3); //设定角速度量程
-  accelgyro.setFullScaleAccelRange(1); //设定加速度量程
+  accelgyro.setFullScaleGyroRange(3); //각속도 측정 범위 설정
+  accelgyro.setFullScaleAccelRange(1); //가속도 측정 범위 설정
 }
 
 void Project_init(){
-  mechdog.MechDog_init(); //初始化MechDog
-  ult.Ultrasound_init(); //初始化发光超声波模块
+  mechdog.MechDog_init(); //MechDog 초기화
+  ult.Ultrasound_init(); //발광 초음파 모듈 초기화
 
-  xTaskCreate( //创建MechDog功能任务 
-    run_task,          
-    "runTask",      
-    2048,           
-    (void *)&obj,           
-    1,              
-    NULL    
+  xTaskCreate( //MechDog 기능 작업 생성
+    run_task,
+    "runTask",
+    2048,
+    (void *)&obj,
+    1,
+    NULL
   );
 
 }
@@ -205,11 +205,11 @@ static void run_task(void *p){
   UltrasoundSonar *u = self->ult;
 
   while(true){
-    if(avo_flg == 1){ //超声波避障
+    if(avo_flg == 1){ //초음파 장애물 회피
       while(true){
         action_num = -1;
         actions_flg = 0;
-        if(avo_flg == 0){ //停止
+        if(avo_flg == 0){ //정지
           dog->move(0,0);
           vTaskDelay(20);
           u->setRGB(0,0x33,0x33,0xff);
@@ -221,7 +221,7 @@ static void run_task(void *p){
           vTaskDelay(1000);
           break;
         }
-        if(u->getDistance() < 10){ //后退
+        if(u->getDistance() < 10){ //후진
           if(forward_flag == 1){
             forward_flag = 0;
             dog->transform(attitude[1],100);
@@ -234,7 +234,7 @@ static void run_task(void *p){
             }
             vTaskDelay(100);
           }
-        }else if(u->getDistance() < 40){ //转弯
+        }else if(u->getDistance() < 40){ //방향 전환
           if(forward_flag == 0){
             forward_flag = 1;
             dog->transform(attitude[0],100);
@@ -248,7 +248,7 @@ static void run_task(void *p){
             vTaskDelay(100);
           }
         }else{
-          u->setRGB(0,0xcc,0x33,0xcc); //前进
+          u->setRGB(0,0xcc,0x33,0xcc); //전진
           dog->move(120,0);
           vTaskDelay(20);
         }
@@ -258,40 +258,40 @@ static void run_task(void *p){
       actions_flg = 0;
       switch(action_num){
         case 0:
-          dog->move(0,0); //停止
+          dog->move(0,0); //정지
           action_num = -1;
           vTaskDelay(20);
           break;
         case 1:
-          dog->move(90,-25); //小角度右前转
+          dog->move(90,-25); //작은 각도로 우측 앞으로 회전
           vTaskDelay(20);
           continue;
         case 2:
-          dog->move(80,-40); //大角度右前转
+          dog->move(80,-40); //큰 각도로 우측 앞으로 회전
           vTaskDelay(20);
           continue;
         case 3:
-          dog->move(120,0); //直线前进
+          dog->move(120,0); //직선 전진
           vTaskDelay(20);
           continue;
         case 4:
-          dog->move(80,40); //大角度左转
+          dog->move(80,40); //큰 각도로 좌회전
           vTaskDelay(20);
           continue;
         case 5:
-          dog->move(90,25); //小角度左转
+          dog->move(90,25); //작은 각도로 좌회전
           vTaskDelay(20);
           continue;
         case 6:
-          dog->move(-40,-20); //左后退
+          dog->move(-40,-20); //좌측으로 후진
           vTaskDelay(20);
           continue;
         case 7:
-          dog->move(-40,0); //直线后退
+          dog->move(-40,0); //직선 후진
           vTaskDelay(20);
           continue;
         case 8:
-          dog->move(-40,20); //右后退
+          dog->move(-40,20); //우측으로 후진
           vTaskDelay(20);
           continue;
       }
@@ -302,67 +302,67 @@ static void run_task(void *p){
       if(actions_flg == 1){
         switch(actions){
           case 1:
-            dog->action_run("left_foot_kick"); //左脚踢球
+            dog->action_run("left_foot_kick"); //왼발 킥
             vTaskDelay(3000);
             break;
           case 2:
-            dog->action_run("right_foot_kick"); //右脚踢球
+            dog->action_run("right_foot_kick"); //오른발 킥
             vTaskDelay(3000);
             break;
           case 3:
-            dog->action_run("stand_four_legs"); //四脚站立
+            dog->action_run("stand_four_legs"); //네 발로 서기
             vTaskDelay(3000);
             break;
           case 4:
-            dog->action_run("sit_dowm"); //坐下
+            dog->action_run("sit_dowm"); //앉기
             vTaskDelay(3000);
             break;
           case 5:
-            dog->action_run("go_prone"); //趴下
+            dog->action_run("go_prone"); //엎드리기
             vTaskDelay(3000);
             break;
           case 6:
-            dog->action_run("stand_two_legs"); //双脚站立
+            dog->action_run("stand_two_legs"); //두 발로 서기
             vTaskDelay(3000);
             break;
           case 7:
-            dog->action_run("handshake"); //握手
+            dog->action_run("handshake"); //악수
             vTaskDelay(3000);
             break;
           case 8:
-            dog->action_run("scrape_a_bow"); //作揖
+            dog->action_run("scrape_a_bow"); //인사(절)
             vTaskDelay(3000);
             break;
           case 9:
-            dog->action_run("nodding_motion"); //点头
+            dog->action_run("nodding_motion"); //고개 끄덕이기
             vTaskDelay(3000);
             break;
           case 10:
-            dog->action_run("boxing"); //拳击
+            dog->action_run("boxing"); //복싱
             vTaskDelay(3000);
             break;
           case 11:
-            dog->action_run("stretch_oneself"); //伸懒腰
+            dog->action_run("stretch_oneself"); //스트레칭
             vTaskDelay(3000);
             break;
           case 12:
-            dog->action_run("pee"); //撒尿
+            dog->action_run("pee"); //소변보기
             vTaskDelay(3000);
             break;
           case 13:
-            dog->action_run("press_up"); //俯卧撑
+            dog->action_run("press_up"); //팔굽혀펴기
             vTaskDelay(3000);
             break;
           case 14:
-            dog->action_run("rotation_pitch"); //转动PITCH
+            dog->action_run("rotation_pitch"); //PITCH 회전
             vTaskDelay(3000);
             break;
           case 15:
-            dog->action_run("rotation_roll"); //转动ROLL
+            dog->action_run("rotation_roll"); //ROLL 회전
             vTaskDelay(3000);
             break;
           case 16:
-            dog->action_run("normal_attitude"); //立正
+            dog->action_run("normal_attitude"); //차렷
             vTaskDelay(3000);
             break;
         }
@@ -373,15 +373,15 @@ static void run_task(void *p){
         }
       }
       actions_flg = 0;
-    }else if(homeostasis_flg == 1){ //自平衡功能
+    }else if(homeostasis_flg == 1){ //자동 균형(자세 안정화) 기능
       dog->homeostasis(true);
       while(true){
-        if(homeostasis_flg == 0){ //停止自平衡
+        if(homeostasis_flg == 0){ //자동 균형 정지
           dog->homeostasis(false);
           vTaskDelay(2000);
           break;
-        }else if(!(dog->read_homeostasis_status())){ //若MechDog摔倒
-          mySerial.printf("CMD|%d|%d|%d|$",rec_data[0],rec_data[1],0); //摔倒反馈
+        }else if(!(dog->read_homeostasis_status())){ //MechDog가 넘어진 경우
+          mySerial.printf("CMD|%d|%d|%d|$",rec_data[0],rec_data[1],0); //넘어짐 피드백
           homeostasis_flg = 0;
           break;
         }

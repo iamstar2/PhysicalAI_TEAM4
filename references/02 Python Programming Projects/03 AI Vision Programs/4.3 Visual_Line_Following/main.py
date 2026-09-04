@@ -4,7 +4,7 @@ import Hiwonder_IIC
 from HW_MechDog import MechDog
 
 '''
-  颜色巡线
+  색상 라인트레이싱(라인 추적)
 '''
 
 iic2 = Hiwonder_IIC.IIC(2)

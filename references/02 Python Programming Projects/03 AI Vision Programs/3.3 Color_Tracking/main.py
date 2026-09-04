@@ -4,7 +4,7 @@ import Hiwonder_IIC
 from HW_MechDog import MechDog
 
 '''
-  颜色追踪 -> 蓝色
+  색상 추적 -> 파란색
 '''
 
 iic2 = Hiwonder_IIC.IIC(2)

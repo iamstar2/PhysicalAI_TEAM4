@@ -4,7 +4,7 @@ import Hiwonder_IIC
 from HW_MechDog import MechDog
 
 '''
-  人脸识别 -> 作揖
+  얼굴 인식 -> 인사(절)
 '''
 
 iic2 = Hiwonder_IIC.IIC(2)

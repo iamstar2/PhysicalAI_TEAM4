@@ -3,57 +3,57 @@ import time
 import Hiwonder_IIC
 from HW_MechDog import MechDog
 
-# 初始化MechDog对象
+# MechDog 객체 초기화
 mechdog = MechDog()
-# 创建IIC1对象
+# IIC1 객체 생성
 i2c1 = Hiwonder_IIC.IIC(1)
-# 创建发光超声波对象
+# 발광 초음파 센서 객체 생성
 i2csonar = Hiwonder_IIC.I2CSonar(i2c1)
-# 创建蜂鸣器对象
+# 부저 객체 생성
 beep = Hiwonder.Buzzer()
 
-# 超声波测量距离
+# 초음파로 측정한 거리
 distance = 0
 
-# 设置MechDog初始姿态
+# MechDog 초기 자세 설정
 mechdog.set_default_pose()
-# 延时函数，参数为延时的时间（单位：秒）
+# 지연 함수, 매개변수는 지연 시간(단위: 초)
 time.sleep(1)
 
 
-# 主函数
+# 메인 함수
 def main():
   global distance
 
   while True:
-    # 获取发光超声波测量的距离
+    # 발광 초음파가 측정한 거리를 가져옴
     distance = i2csonar.getDistance()
-    # 若距离小于10cm
+    # 거리가 10cm보다 작으면
     if (distance<10):
-      # 发光超声波设置颜色函数
-      # 参数1：设置的灯，0为2个灯都设置，1为设置灯1,2为设置灯2；
-      # 参数2、3、4：对应红、绿、蓝3种颜色值
-      i2csonar.setRGB(0,255,0,0) # 设置为红色
+      # 발광 초음파 색상 설정 함수
+      # 매개변수1: 설정할 램프, 0은 두 램프 모두 설정, 1은 램프1 설정, 2는 램프2 설정;
+      # 매개변수2, 3, 4: 각각 빨강, 초록, 파랑 3가지 색상 값에 해당
+      i2csonar.setRGB(0,255,0,0) # 빨간색으로 설정
     else:
       if (distance>50):
-        i2csonar.setRGB(0,0,255,0) # 设置为绿色
+        i2csonar.setRGB(0,0,255,0) # 초록색으로 설정
       else:
-        i2csonar.setRGB(0,(250-((round(distance))*5)),((round(distance))*5),0) # 根据距离设置红、绿2种颜色
+        i2csonar.setRGB(0,(250-((round(distance))*5)),((round(distance))*5),0) # 거리에 따라 빨강, 초록 2가지 색상을 설정
     time.sleep(0.1)
 
-# 蜂鸣器鸣响函数
+# 부저 울림 함수
 def start_main1():
   global distance
 
   while True:
-    # 当距离小于50cm时，根据距离鸣响
+    # 거리가 50cm보다 작을 때, 거리에 따라 울림
     if (distance<=50):
       beep.playTone(800,100,True)
       time.sleep((distance/50))
     else:
       time.sleep(50)
 
-# 注册蜂鸣器鸣响线程
+# 부저 울림 스레드 등록
 Hiwonder.startMain(start_main1)
-# 执行主函数
+# 메인 함수 실행
 main()

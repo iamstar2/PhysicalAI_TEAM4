@@ -7,7 +7,7 @@ MechDog mechdog;
 
 void setup() {
   Serial.begin(115200);
-  mechdog.MechDog_init(); //初始化MechDog
+  mechdog.MechDog_init(); //MechDog 초기화
   delay(1000);
 }
 
@@ -15,15 +15,15 @@ void loop() {
   userTask();
 }
 
-/* 用户函数 */
+/* 사용자 함수 */
 void userTask(){
-  /* 
-     action_run()函数
-     参数：需要运行的动作组名称，可前往本节内容文档下查看
+  /*
+     action_run() 함수
+     매개변수: 실행할 동작 그룹의 이름. 자세한 내용은 본 절의 문서를 참고하세요
   */
   switch (step) {
     case 0:
-      mechdog.action_run("left_foot_kick"); //执行左脚踢球动作组
+      mechdog.action_run("left_foot_kick"); //왼발 킥 동작 그룹 실행
       delay(3000);
       step++;
       break;

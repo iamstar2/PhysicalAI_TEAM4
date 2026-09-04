@@ -2,17 +2,17 @@
 #include "HW_MechDog.h"
 
 MechDog mechdog;
-//创建亮度传感器对象
+//밝기 센서 객체 생성
 LightSensor light;
 
-//光照亮度阈值
+//조도(밝기) 임계값
 uint16_t Intensity_threshold = 100;
-//读取的亮度值
+//읽어온 밝기 값
 uint16_t brightness = 0;
 
 void setup() {
   Serial.begin(115200);
-  mechdog.MechDog_init(); //初始化MechDog
+  mechdog.MechDog_init(); //MechDog 초기화
   delay(1000);
 }
 
@@ -20,31 +20,31 @@ void loop() {
   userTask();
 }
 
-/* 用户函数 */
+/* 사용자 함수 */
 void userTask(){
-  //读取光照强度
+  //조도 읽기
   brightness = light.read();
-  //若亮度值大于阈值
+  //밝기 값이 임계값보다 크면
   if(brightness >= Intensity_threshold){
-    //执行站立动作
+    //서기 동작 실행
     //mechdog.action_run("stand_four_legs");
     mechdog.set_default_pose();
     delay(2000);
-    //行走
+    //걷기
     mechdog.move(80,0);
     delay(1000);
-    //当亮度值大于阈值，则一直等待，直到小于时则跳出循环。
+    //밝기 값이 임계값보다 큰 동안 계속 대기하다가, 임계값보다 작아지면 반복문을 빠져나갑니다.
     while(light.read() > Intensity_threshold){
       delay(100);
     }
   }else{
-    //停下
+    //정지
     mechdog.move(0,0);
     delay(2000);
-    //执行趴下动作组
+    //엎드리기 동작 그룹 실행
     mechdog.action_run("go_prone");
     delay(1000);
-    //当亮度值小于阈值，则一直等待，直到大于时则跳出循环。
+    //밝기 값이 임계값보다 작은 동안 계속 대기하다가, 임계값보다 커지면 반복문을 빠져나갑니다.
     while(light.read() < Intensity_threshold){
       delay(100);
     }
