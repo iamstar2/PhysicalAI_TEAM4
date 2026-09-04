@@ -9,6 +9,29 @@ MechDog 출입 통제 프로젝트에서 A(비전/게이트) · B(대화) · C(�
 라이브러리를 만들지 않은 이유는, 대시보드가 React/JS라 Python 클래스를 못
 쓰기 때문이다 — JSON Schema는 언어에 상관없이 다 쓸 수 있다.
 
+## MechDog 온보드 기본 제공 SDK (참고)
+
+`references/`에는 제조사(Hiwonder)가 MechDog 본체에 기본 제공하는 오픈소스
+예제/라이브러리가 들어있다. 이 저장소의 `schema/`는 RPi/PC 사이에서 MQTT로
+오가는 메시지 형식이고, 아래는 MechDog 본체(ESP32)가 온보드에서 바로 쓸 수 있는
+**별도 계층의 SDK**다 — 서로 다른 계층이니 혼동하지 말 것.
+
+- **지원 플랫폼**: Scratch(WonderCode, 블록코딩) · Python(MicroPython) · Arduino(C/C++) · 모바일 앱(BLE)
+- **컨트롤러**: 메인 컨트롤러 ESP32(모션·역기구학 담당), 별도 ESP32-S3 Cam 모듈(비전, I2C로 연결)
+- **온보드 Python(MicroPython) 모듈** (펌웨어에 이미 포함되어 import만 하면 됨):
+  - `HW_MechDog.MechDog` — 모션 제어 (`action_run()`으로 동작그룹 실행, 보행 속도·자세 조절)
+  - `Hiwonder` — 초음파/조도/터치 센서, ASR(음성인식)+MP3 재생 등 부가 기능
+  - `Hiwonder_IIC` — I2C 주변장치 접근. `Hiwonder_IIC.ESP32S3Cam`에 **`face_recognition()`이 이미 내장**되어 있음
+  - `Hiwonder_BLE.BLE` — 블루투스로 모바일 앱과 통신
+  - `machine` — MicroPython 표준 하드웨어 제어(GPIO/I2C/타이머 등)
+- **Arduino(C++) 쪽**: `HW_MechDog.h`, `mech_base_types.h` 헤더로 동일한 모션 API 제공,
+  다른 보드와 UART로 시리얼 통신하는 예제(`MechDog_uart`)도 포함
+- **공식 자료**: [Hiwonder MechDog 문서](https://docs.hiwonder.com/projects/MechDog/en/latest/) ·
+  [제품 페이지](https://www.hiwonder.com/products/mechdog) · [GitHub](https://github.com/Hiwonder/MechDog)
+
+> **참고**: `Hiwonder_IIC.ESP32S3Cam.face_recognition()`이 이미 온보드에 있으므로, A(여도훈)가
+> InsightFace/ArcFace로 직접 구현하기 전에 이 내장 기능만으로 충분한지 먼저 확인해볼 만하다.
+
 ## 구조
 
 ```
@@ -21,6 +44,8 @@ tools/
   mock_publisher.py     - 시나리오별 샘플 메시지 발행 (참고 구현, Python)
   echo_subscriber.py    - 전 토픽 구독 + 스펙 검증하며 출력 (참고 구현, Python)
   cleanup_snapshots.py  - 보관 기간 초과 스냅샷/오디오 정리
+references/
+  01~04                  - Hiwonder 공식 MechDog 예제 (Scratch/Python/Arduino/모바일 앱)
 ```
 
 ## 스펙 읽는 법
