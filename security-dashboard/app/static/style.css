@@ -1,0 +1,186 @@
+:root {
+  --bg: #f2f4f7;
+  --card-bg: #ffffff;
+  --text: #1b2430;
+  --muted: #6b7688;
+  --border: #e1e5eb;
+
+  --normal: #1f9d55;
+  --pending: #6b7688;
+  --warning: #d9822b;
+  --alert: #d92b2b;
+  --unknown: #9aa4b2;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #14213d;
+  color: #fff;
+}
+
+.topbar h1 { font-size: 20px; margin: 0; }
+
+.mqtt-indicator { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+
+.dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--unknown);
+  display: inline-block;
+}
+.dot.on { background: var(--normal); }
+.dot.off { background: var(--alert); }
+
+.emergency-banner {
+  background: var(--alert);
+  color: #fff;
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  animation: blink 1.2s infinite;
+}
+
+/* .emergency-banner { display: flex } 와 [hidden] { display: none }는 우선순위가
+   같아서, 뒤에 오는 이 규칙이 없으면 hidden 속성이 무시되고 배너가 계속 보인다. */
+.emergency-banner[hidden] { display: none; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.emergency-banner button {
+  background: #fff;
+  color: var(--alert);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+main { padding: 20px 24px 40px; max-width: 1100px; margin: 0 auto; }
+
+.node-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.node-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+
+.node-name { font-weight: 600; margin-bottom: 6px; }
+.node-name small { color: var(--muted); font-weight: 400; }
+
+.node-state {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: bold;
+  font-size: 13px;
+  background: var(--unknown);
+  color: #fff;
+}
+
+.node-state.ready { background: var(--normal); }
+.node-state.busy { background: var(--warning); }
+.node-state.booting { background: #3a6ea5; }
+.node-state.error, .node-state.offline { background: var(--alert); }
+.node-state.unknown { background: var(--unknown); }
+
+.node-ts { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.card h2 { margin-top: 0; font-size: 16px; }
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 20px;
+}
+
+.visitor-info .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.visitor-info .row:last-child { border-bottom: none; }
+.visitor-info .label { color: var(--muted); }
+
+.status-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+
+.status-badge {
+  font-size: 28px;
+  font-weight: 800;
+  padding: 20px 30px;
+  border-radius: 14px;
+  color: #fff;
+  width: 100%;
+}
+
+.status-normal { background: var(--normal); }
+.status-pending { background: var(--pending); }
+.status-warning { background: var(--warning); }
+.status-alert { background: var(--alert); animation: blink 1s infinite; }
+.status-unknown { background: var(--unknown); }
+
+.active-alert {
+  border-radius: 8px;
+  padding: 14px;
+  background: #fafafa;
+  border: 1px solid var(--border);
+}
+
+.active-alert.has-alert.level-warn { background: #fff6e9; border-color: var(--warning); }
+.active-alert.has-alert.level-critical { background: #fdecec; border-color: var(--alert); }
+
+.active-alert .snapshot { margin-top: 10px; max-width: 320px; border-radius: 8px; border: 1px solid var(--border); }
+.active-alert .no-snapshot { color: var(--muted); font-style: italic; margin-top: 8px; }
+
+.actions { margin-top: 14px; display: flex; gap: 10px; }
+
+.btn {
+  border: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-warn { background: var(--warning); color: #fff; }
+.btn-danger { background: var(--alert); color: #fff; }
+
+.history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.history-table th, .history-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+.history-table td.empty { text-align: center; color: var(--muted); padding: 20px; }
+
+.badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: bold; color: #fff; }
+.badge.warn { background: var(--warning); }
+.badge.critical { background: var(--alert); }
+.badge.info { background: var(--pending); }
+.badge.resolved { background: var(--normal); }
+.badge.unresolved { background: var(--alert); }

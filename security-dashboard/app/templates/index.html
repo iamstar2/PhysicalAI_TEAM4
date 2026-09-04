@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MechDog 보안 관제 대시보드</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>MechDog 보안 관제 대시보드</h1>
+    <div class="mqtt-indicator" id="mqttIndicator">
+      <span class="dot" id="mqttDot"></span>
+      <span id="mqttText">MQTT 확인 중...</span>
+    </div>
+  </header>
+
+  <div id="emergencyBanner" class="emergency-banner" hidden>
+    <span>🚨 EMERGENCY STOP ACTIVE — 긴급 정지 상태</span>
+    <button id="emergencyResetBtn">긴급 정지 해제</button>
+  </div>
+
+  <main>
+    <section class="node-row">
+      <div class="node-card" data-node="mechdog_a">
+        <div class="node-name">MechDog A <small>(게이트/비전)</small></div>
+        <div class="node-state" id="state-mechdog_a">UNKNOWN</div>
+        <div class="node-ts" id="ts-mechdog_a"></div>
+      </div>
+      <div class="node-card" data-node="mechdog_b">
+        <div class="node-name">MechDog B <small>(대화)</small></div>
+        <div class="node-state" id="state-mechdog_b">UNKNOWN</div>
+        <div class="node-ts" id="ts-mechdog_b"></div>
+      </div>
+      <div class="node-card" data-node="mechdog_c">
+        <div class="node-name">MechDog C <small>(에스코트)</small></div>
+        <div class="node-state" id="state-mechdog_c">UNKNOWN</div>
+        <div class="node-ts" id="ts-mechdog_c"></div>
+      </div>
+      <div class="node-card" data-node="mechdog_d">
+        <div class="node-name">MechDog D <small>(보안, 나)</small></div>
+        <div class="node-state" id="state-mechdog_d">UNKNOWN</div>
+        <div class="node-ts" id="ts-mechdog_d"></div>
+      </div>
+    </section>
+
+    <section class="main-grid">
+      <div class="card visitor-card">
+        <h2>현재 방문자</h2>
+        <div id="visitorInfo" class="visitor-info">방문자 정보 없음</div>
+      </div>
+
+      <div class="card status-card">
+        <h2>현재 보안 상태</h2>
+        <div id="statusBadge" class="status-badge status-unknown">데이터 없음</div>
+      </div>
+    </section>
+
+    <section class="card alert-card">
+      <h2>현재 경고</h2>
+      <div id="activeAlert" class="active-alert">현재 활성 경고가 없습니다.</div>
+      <div class="actions">
+        <button id="clearAlertBtn" class="btn btn-warn" disabled>경고 해제</button>
+        <button id="emergencyStopBtn" class="btn btn-danger">긴급 정지</button>
+      </div>
+    </section>
+
+    <section class="card history-card">
+      <h2>최근 경고 이벤트 (최대 20개)</h2>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>시각</th>
+            <th>단계</th>
+            <th>사유</th>
+            <th>세션 / 대상</th>
+            <th>해제 여부</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="5" class="empty">아직 경고 이력이 없습니다.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
