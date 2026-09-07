@@ -53,8 +53,17 @@
     "NodeState": { "type": "string", "enum": ["booting", "ready", "busy", "error", "offline"] },
     "Destination": {
       "type": "string",
-      "enum": ["lobby", "meeting_room_1", "meeting_room_2", "office_2f", "warehouse"],
-      "description": "TODO: 실제 값으로 교체 필요 - 담당자: 최현수/여도훈. 실내 맵/좌표 확정 전까지 임시 5개."
+      "enum": [
+        "reception",
+        "meeting_room_1",
+        "safety_training_room",
+        "inbound_dock",
+        "outbound_dock",
+        "inspection_area",
+        "elevator_hall",
+        "exit_gate"
+      ],
+      "description": "에스코트 목적지. 물류센터(중소형 배송·보관) 기준으로 확정된 8종. MechDog은 계단·엘리베이터를 이용할 수 없으므로 1층 평탄 경로 목적지만 포함하며, 2층 이상 목적지는 elevator_hall로 대체 안내한다. 좌표·웨이포인트 측량은 최현수(C) 담당."
     },
     "Confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
     "Point": {

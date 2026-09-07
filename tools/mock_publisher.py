@@ -300,7 +300,7 @@ def scenario_escort_lost(dry_run: bool, speed: float) -> None:
         payload={
             "msg_type": "escort.status",
             "state": "moving",
-            "destination": "office_2f",
+            "destination": "inbound_dock",
             "position": {"x": 1.0, "y": 0.0, "z": 0.0},
             "heading_deg": 45.0,
             "distance_to_target_m": 6.0,
@@ -314,7 +314,7 @@ def scenario_escort_lost(dry_run: bool, speed: float) -> None:
         payload={
             "msg_type": "escort.status",
             "state": "paused",
-            "destination": "office_2f",
+            "destination": "inbound_dock",
             "position": {"x": 2.0, "y": 0.5, "z": 0.0},
             "heading_deg": 45.0,
             "distance_to_target_m": 5.0,
