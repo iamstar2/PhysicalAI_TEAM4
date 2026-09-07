@@ -1,0 +1,114 @@
+# 호스트 2 — 메인서버 (Docker) (Hw설계도.png 기준)
+#
+# API 서버가 DB 접근 유일 관문이고, 스냅샷·오디오·상태를 REST로 받아 node_id/kind로
+# 시나리오 A~D에 라우팅한다(판정 로직 없음). 시나리오 A~D 자체는 기존 vision/dialog/
+# escort/security 서비스이며, MQTT로는 호스트1의 브로커에 직접 붙어 실시간 이벤트를
+# 주고받는다 — API 서버는 REST(파일 업로드·조회) 쪽만 담당한다.
+#
+# 로컬 데모(한 대에서 전부 실행)만 할 거면 이 파일 대신 docker-compose.yml을 쓴다.
+#
+# 사용법 (호스트1을 먼저 별도 서버에 띄운 뒤):
+#   HOST1_MQTT_HOST=<호스트1 주소> docker compose -f docker-compose.host2.yml up -d
+
+services:
+  api-server:
+    build:
+      context: ./api-server   # 백경률 — REST 게이트웨이, DB 접근 관문, 시나리오 라우팅 (판정 로직 없음)
+    container_name: api_server
+    ports:
+      - "8080:8080"   # POST /snapshots, /audio, /status | GET 조회·통계
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://mechdog:mechdog@postgres:5432/mechdog
+      # 라우팅 대상 (시나리오 A~D 서비스의 내부 주소)
+      ROUTE_A_URL: http://vision-service:8000
+      ROUTE_B_URL: http://dialog-service:8000
+      ROUTE_C_URL: http://escort-service:8000
+      ROUTE_D_URL: http://security-dashboard:8000
+    volumes:
+      - snap_data:/data/snap
+      - audio_data:/data/audio
+
+  vision-service:
+    build:
+      context: ./vision-service   # 여도훈 — 시나리오 A: 얼굴인식·PPE 판정
+    container_name: mechdog_a
+    depends_on:
+      - api-server
+    environment:
+      MQTT_HOST: ${HOST1_MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${HOST1_MQTT_PORT:-1883}
+      MQTT_USER: ${MQTT_USER:-}
+      MQTT_PASS: ${MQTT_PASS:-}
+      MECHDOG_SNAPSHOT_ROOT: /data/snap
+      MECHDOG_AUDIO_ROOT: /data/audio
+    volumes:
+      - snap_data:/data/snap
+      - audio_data:/data/audio
+
+  dialog-service:
+    build:
+      context: ./dialog-service   # 김별이 — 시나리오 B: STT/TTS 대화 처리
+    container_name: mechdog_b
+    depends_on:
+      - api-server
+    environment:
+      MQTT_HOST: ${HOST1_MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${HOST1_MQTT_PORT:-1883}
+      MQTT_USER: ${MQTT_USER:-}
+      MQTT_PASS: ${MQTT_PASS:-}
+    volumes:
+      - audio_data:/data/audio
+
+  escort-service:
+    build:
+      context: ./escort-service   # 최현수 — 시나리오 C: 경로·에스코트 제어
+    container_name: mechdog_c
+    depends_on:
+      - api-server
+      - postgres
+    environment:
+      MQTT_HOST: ${HOST1_MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${HOST1_MQTT_PORT:-1883}
+      MQTT_USER: ${MQTT_USER:-}
+      MQTT_PASS: ${MQTT_PASS:-}
+      # DB 접근은 원칙상 API 서버가 유일한 관문(Hw설계도.png)이지만, 지금 이 서비스는
+      # MQTT->DB 브릿지 역할까지 겸하고 있어 당분간 직접 접속을 유지한다.
+      # API 서버 경유로 전환할지는 최현수(C)와 별도 협의 필요.
+      DATABASE_URL: postgresql://mechdog:mechdog@postgres:5432/mechdog
+    volumes:
+      - snap_data:/data/snap
+
+  security-dashboard:
+    build:
+      context: ./security-dashboard   # 백경률 — 시나리오 D: 예외 대응 + 대시보드 서버
+    container_name: mechdog_d
+    depends_on:
+      - api-server
+    ports:
+      - "3000:3000"   # 대시보드 웹
+    environment:
+      MQTT_HOST: ${HOST1_MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${HOST1_MQTT_PORT:-1883}
+      MQTT_USER: ${MQTT_USER:-}
+      MQTT_PASS: ${MQTT_PASS:-}
+    volumes:
+      - snap_data:/data/snap
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: mechdog
+      POSTGRES_PASSWORD: mechdog
+      POSTGRES_DB: mechdog
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  snap_data:
+  audio_data:
+  postgres_data:

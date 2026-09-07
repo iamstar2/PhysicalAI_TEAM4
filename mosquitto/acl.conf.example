@@ -1,0 +1,49 @@
+# MQTT ACL 예시 (목표 아키텍처, Hw설계도.png "인증 + ACL" 항목용).
+# 실제로 쓰려면 mosquitto/acl.conf 로 복사하고 mosquitto.conf의 acl_file 줄 주석을 해제한다.
+# 토픽·발행 주체는 schema/topics.json 을 근거로 했다 — 스키마가 바뀌면 이 파일도 같이 갱신할 것.
+#
+# 문법: mosquitto_passwd로 만든 사용자명 기준. user 블록 안의 topic 줄이 그 사용자의 권한이다.
+#   topic read <필터>   - 구독만 허용
+#   topic write <필터>  - 발행만 허용
+#   topic readwrite <필터> - 둘 다 허용
+
+# --- MechDog A (vision-service) ---
+# 얼굴/PPE 판정 발행, 세션 인계 발행, 자기 상태만 발행
+user mechdog_a
+topic write mechdog/v1/vision/face
+topic write mechdog/v1/vision/ppe
+topic write mechdog/v1/gate/session
+topic write mechdog/v1/system/health/mechdog_a
+
+# --- MechDog B (dialog-service) ---
+# 세션 인계 구독, 목적지 확정·경고·자기 상태 발행
+user mechdog_b
+topic read mechdog/v1/gate/session
+topic write mechdog/v1/dialog/result
+topic write mechdog/v1/alert/event
+topic write mechdog/v1/system/health/mechdog_b
+
+# --- MechDog C (escort-service) ---
+# 목적지 확정 구독, 에스코트 상태·자기 상태 발행
+user mechdog_c
+topic read mechdog/v1/dialog/result
+topic write mechdog/v1/escort/status
+topic write mechdog/v1/system/health/mechdog_c
+
+# --- MechDog D (security-dashboard: 경고 상태머신 + 대시보드) ---
+# 전체 이벤트 구독(대시보드 표시용), 경고·자기 상태 발행
+user mechdog_d
+topic read mechdog/v1/#
+topic write mechdog/v1/alert/event
+topic write mechdog/v1/system/health/mechdog_d
+
+# --- 수집서버 (collector, 호스트1) ---
+# 판정·정규화 없이 전체 이벤트를 구독만 함
+user collector
+topic read mechdog/v1/#
+
+# --- API 서버 / 시나리오 A~D 서비스 (호스트2, api-server) ---
+# 필요한 만큼만 구독 + 자기 쪽 발행. 현재는 각 mechdog_* 계정으로 이미 커버되므로
+# api-server 계정은 조회·라우팅용 구독만 필요.
+user api_server
+topic read mechdog/v1/#

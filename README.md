@@ -117,6 +117,14 @@ export MQTT_PORT=1883
    `tools/mock_publisher.py`, `tools/echo_subscriber.py`에 이미 그렇게 되어 있으니
    참고하면 된다.
 
+### 목표 아키텍처: TLS + ACL (2-호스트 배포 시)
+
+로컬 데모를 넘어 실제로 브로커/수집 호스트와 메인서버 호스트를 분리 배포할 때는
+TLS(:8883)와 토픽별 ACL까지 켠다. `mosquitto/mosquitto.conf` 하단의 "목표
+아키텍처" 블록 주석을 해제하고, 인증서(`mosquitto/certs/`)와
+`mosquitto/acl.conf`(예시: [acl.conf.example](mosquitto/acl.conf.example) —
+`schema/topics.json` 기준으로 노드별 발행/구독 권한을 정의해 뒀다)를 준비하면 된다.
+
 ## Docker 통합
 
 스펙이 코드가 아니라 JSON 문서이므로, 컨테이너에 설치할 게 없다. 각자 서비스
@@ -125,8 +133,19 @@ export MQTT_PORT=1883
 실행 중 컨테이너가 이 저장소 자체를 마운트해야 하는 것도 아니다 — JSON 스펙은
 빌드/개발 시점 참고 자료이지 런타임 의존성이 아니다.
 
-배포 토폴로지(포트, 볼륨, 컨테이너 이름) 예시는 [docker-compose.yml](docker-compose.yml)
-참고. 베이스 이미지는 `python:3.11-slim`으로 통일 (회의록 합의 사항, Python
+배포 토폴로지는 두 가지로 나뉜다.
+
+- **로컬 단일 호스트 데모** (개발 중 기본): [docker-compose.yml](docker-compose.yml).
+  브로커·4대 로봇·DB를 전부 한 대에서 같이 띄운다.
+- **목표 아키텍처 — 2-호스트 분리 배포** (`work_docs`의 `Hw설계도.png` 기준):
+  [docker-compose.host1.yml](docker-compose.host1.yml)(브로커 + 수집서버) /
+  [docker-compose.host2.yml](docker-compose.host2.yml)(API 서버 + 시나리오
+  A~D + DB). API 서버가 스냅샷·오디오·상태 업로드(REST)와 DB 접근의 유일한
+  관문이고, 시나리오 A~D는 기존 vision/dialog/escort/security 서비스가 그대로
+  MQTT로 호스트1의 브로커에 붙는 구조다. 호스트2는 `HOST1_MQTT_HOST` 환경변수로
+  호스트1의 브로커 주소를 가리킨다.
+
+베이스 이미지는 `python:3.11-slim`으로 통일 (회의록 합의 사항, Python
 서비스에 한정).
 
 ## 얼굴 이미지 보관 정책
