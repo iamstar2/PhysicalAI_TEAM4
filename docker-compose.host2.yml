@@ -5,15 +5,20 @@
 # escort/security 서비스이며, MQTT로는 호스트1의 브로커에 직접 붙어 실시간 이벤트를
 # 주고받는다 — API 서버는 REST(파일 업로드·조회) 쪽만 담당한다.
 #
-# 로컬 데모(한 대에서 전부 실행)만 할 거면 이 파일 대신 docker-compose.yml을 쓴다.
+# 사용법 — 두 가지 모드:
 #
-# 사용법 (호스트1을 먼저 별도 서버에 띄운 뒤):
-#   HOST1_MQTT_HOST=<호스트1 주소> docker compose -f docker-compose.host2.yml up -d
+#   1) 로컬 한 대에서 전부 실행 (개발용): host1과 같이 -f 두 번으로 띄운다.
+#      (자세한 설명은 docker-compose.host1.yml 상단 참고)
+#        docker compose -f docker-compose.host1.yml -f docker-compose.host2.yml up -d
+#
+#   2) 실제 2-호스트 분리 배포: 호스트1을 먼저 별도 서버에 띄운 뒤, 이 파일을
+#      다른 서버에서 HOST1_MQTT_HOST로 그 서버 주소를 가리키게 실행한다.
+#        HOST1_MQTT_HOST=<호스트1 주소> docker compose -f docker-compose.host2.yml up -d
 
 services:
   api-server:
     build:
-      context: ./api-server   # 백경률 — REST 게이트웨이, DB 접근 관문, 시나리오 라우팅 (판정 로직 없음)
+      context: ./api-server   # 여도훈 — REST 게이트웨이, DB 접근 관문, 시나리오 라우팅 (판정 로직 없음)
     container_name: api_server
     ports:
       - "8080:8080"   # POST /snapshots, /audio, /status | GET 조회·통계

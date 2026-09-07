@@ -3,11 +3,16 @@
 # 4대 로봇(A/B/C/D)이 MQTT로 직접 붙는 브로커와, 판정 없이 이벤트를 그대로 적재하는
 # 수집서버만 이 호스트에 둔다. 판정 로직·DB·대시보드는 호스트2(docker-compose.host2.yml)에 있다.
 #
-# 로컬 데모(한 대에서 전부 실행)만 할 거면 이 파일 대신 docker-compose.yml을 쓴다.
-# 실제로 브로커를 별도 서버로 분리 배포할 때만 이 파일을 그 서버에서 실행한다.
+# 사용법 — 두 가지 모드:
 #
-# 사용법:
-#   docker compose -f docker-compose.host1.yml up -d
+#   1) 로컬 한 대에서 전부 실행 (개발용): host2와 같이 -f 두 번으로 띄운다.
+#      두 파일이 하나의 프로젝트로 합쳐져 같은 네트워크를 쓰므로, host2의
+#      MQTT_HOST 기본값(mosquitto)이 이 파일의 브로커 서비스명과 그대로 맞는다.
+#        docker compose -f docker-compose.host1.yml -f docker-compose.host2.yml up -d
+#
+#   2) 실제 2-호스트 분리 배포: 이 파일만 브로커 서버에서 실행하고,
+#      host2는 다른 서버에서 HOST1_MQTT_HOST=<이 서버 주소>로 실행한다.
+#        docker compose -f docker-compose.host1.yml up -d
 #
 # TLS(:8883)+인증+ACL을 켜려면 mosquitto/mosquitto.conf 하단의 "목표 아키텍처" 블록
 # 주석을 해제하고, mosquitto/certs/*.{crt,key}, mosquitto/passwd, mosquitto/acl.conf

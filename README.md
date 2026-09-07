@@ -133,17 +133,22 @@ TLS(:8883)와 토픽별 ACL까지 켠다. `mosquitto/mosquitto.conf` 하단의 "
 실행 중 컨테이너가 이 저장소 자체를 마운트해야 하는 것도 아니다 — JSON 스펙은
 빌드/개발 시점 참고 자료이지 런타임 의존성이 아니다.
 
-배포 토폴로지는 두 가지로 나뉜다.
+배포 구성은 [docker-compose.host1.yml](docker-compose.host1.yml)(브로커 + 수집서버) /
+[docker-compose.host2.yml](docker-compose.host2.yml)(API 서버 + 시나리오 A~D + DB)
+두 파일로 관리한다(`work_docs`의 `Hw설계도.png` 기준). API 서버가 스냅샷·오디오·상태
+업로드(REST)와 DB 접근의 유일한 관문이고, 시나리오 A~D는 기존 vision/dialog/escort/
+security 서비스가 그대로 MQTT로 호스트1의 브로커에 붙는 구조다.
 
-- **로컬 단일 호스트 데모** (개발 중 기본): [docker-compose.yml](docker-compose.yml).
-  브로커·4대 로봇·DB를 전부 한 대에서 같이 띄운다.
-- **목표 아키텍처 — 2-호스트 분리 배포** (`work_docs`의 `Hw설계도.png` 기준):
-  [docker-compose.host1.yml](docker-compose.host1.yml)(브로커 + 수집서버) /
-  [docker-compose.host2.yml](docker-compose.host2.yml)(API 서버 + 시나리오
-  A~D + DB). API 서버가 스냅샷·오디오·상태 업로드(REST)와 DB 접근의 유일한
-  관문이고, 시나리오 A~D는 기존 vision/dialog/escort/security 서비스가 그대로
-  MQTT로 호스트1의 브로커에 붙는 구조다. 호스트2는 `HOST1_MQTT_HOST` 환경변수로
-  호스트1의 브로커 주소를 가리킨다.
+- **로컬 한 대에서 전부 실행 (개발용)**: 두 파일을 `-f`로 같이 띄우면 하나의
+  프로젝트로 합쳐져 같은 네트워크를 쓰므로 별도 설정 없이 바로 붙는다.
+  ```bash
+  docker compose -f docker-compose.host1.yml -f docker-compose.host2.yml up -d
+  ```
+- **실제 2-호스트 분리 배포**: 호스트1을 먼저 별도 서버에 띄운 뒤, 호스트2는
+  `HOST1_MQTT_HOST` 환경변수로 그 서버 주소를 가리키게 실행한다.
+  ```bash
+  HOST1_MQTT_HOST=<호스트1 주소> docker compose -f docker-compose.host2.yml up -d
+  ```
 
 베이스 이미지는 `python:3.11-slim`으로 통일 (회의록 합의 사항, Python
 서비스에 한정).
