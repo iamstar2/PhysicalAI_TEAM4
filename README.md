@@ -36,6 +36,7 @@ MechDog 출입 통제 프로젝트에서 A(비전/게이트) · B(대화) · C(�
 
 ```
 schema/
+  README.md                     - ★ 스키마 설계서 (왜 이렇게 만들었는지 - 먼저 읽을 것)
   mechdog_messages.schema.json  - 메시지 스펙 (Envelope + 메시지 타입별 payload)
   topics.json                   - MQTT 토픽 이름 + QoS/Retain 정책 + 근거
   examples/                     - 메시지 타입별 실제 JSON 예시
@@ -47,6 +48,10 @@ tools/
 references/
   01~04                  - Hiwonder 공식 MechDog 예제 (Scratch/Python/Arduino/모바일 앱)
 ```
+
+> 각 필드를 **왜** 그렇게 정했는지(3값 판정 결과, 세션 ID 승계, 이미지는 경로만 전송,
+> QoS 판단 기준 등)는 [schema/README.md](schema/README.md)에 정리해 뒀습니다.
+> 각자 서비스를 구현하기 전에 한 번 읽어보시면 좋습니다.
 
 ## 스펙 읽는 법
 
