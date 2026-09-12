@@ -47,7 +47,7 @@
     "AlertLevel": { "type": "string", "enum": ["info", "warn", "critical"] },
     "AlertReason": {
       "type": "string",
-      "enum": ["unauthorized", "no_helmet", "no_vest", "face_timeout", "escort_lost"]
+      "enum": ["unauthorized", "no_helmet", "no_vest", "face_timeout", "escort_lost", "dialog_timeout", "dialog_failed"]
     },
     "EscortState": { "type": "string", "enum": ["idle", "moving", "paused", "arrived", "aborted"] },
     "NodeState": { "type": "string", "enum": ["booting", "ready", "busy", "error", "offline"] },

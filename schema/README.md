@@ -83,6 +83,21 @@ MechDog A·B·C·D와 서버가 주고받는 모든 메시지의 **단일 규약
 | `alert.event` | D (상황에 따라 B) | 경고·예외 발생 |
 | `system.health` | 각 노드 | 노드 동작 상태 (5초 주기) |
 
+### `AlertReason` 값과 발행 주체
+
+| 값 | 발행 | 의미 |
+|---|---|---|
+| `unauthorized` | A | 얼굴 인가 실패 |
+| `no_helmet` | A | 안전모 미착용 |
+| `no_vest` | A | 조끼 미착용 |
+| `face_timeout` | A | 얼굴 판정 타임아웃 |
+| `escort_lost` | C | 에스코트 중 경로 이탈 |
+| `dialog_timeout` | B | 방문자가 대답 없이 이탈 |
+| `dialog_failed` | B | 목적지 확인 재질문 3회 모두 실패 |
+
+`dialog_timeout`·`dialog_failed`는 B가 발행 주체이면서 쓸 값이 없어 `face_timeout`을
+임시로 차용하던 것을 대체한 값이다 (2026-09-12 추가, `../DECISIONS.md` 참고).
+
 ---
 
 ## 5. 판정 결과는 왜 3값인가 (2값이면 안 되는 이유)
@@ -166,6 +181,6 @@ python ../tools/mock_publisher.py normal --dry-run   # 시나리오 메시지를
 |---|---|
 | **선택 필드 추가** | 하위호환. 스키마에 추가하고 팀에 공유하면 끝. 기존 노드는 무시하고 계속 동작 |
 | **필수 필드 추가 / 필드 삭제 / 타입 변경 / enum 값 제거** | **파괴적 변경.** `ver`을 2로 올리고 토픽도 `mechdog/v2`로 분리해서, 구버전 노드가 새 메시지를 잘못 읽지 않게 한다 |
-| **enum 값 추가** | 받는 쪽이 모르는 값을 만나면 어떻게 할지 먼저 정한 뒤 추가 (예: `AlertReason`에 `dialog_timeout` 추가 검토 중 — [`../DECISIONS.md`](../DECISIONS.md) 참고) |
+| **enum 값 추가** | 받는 쪽이 모르는 값을 만나면 어떻게 할지 먼저 정한 뒤 추가 (예: `AlertReason`에 `dialog_timeout`·`dialog_failed` 추가 완료, 2026-09-12 — [`../DECISIONS.md`](../DECISIONS.md) 참고) |
 
 미확정 항목과 결정 이력은 [`../DECISIONS.md`](../DECISIONS.md)에 있습니다.
