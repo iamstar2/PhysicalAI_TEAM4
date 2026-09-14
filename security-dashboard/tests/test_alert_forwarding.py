@@ -187,8 +187,8 @@ def main() -> None:
         check("세션 A/B/C 세 개 동시 활성", active_sessions == {session_a, session_b, session_c})
 
         # --- 5) 관리자가 세션 A(D 자신의 경고)만 해제 ----------------------------
-        cleared = client.clear_active_alert(session_a)
-        check("clear_active_alert(A) 성공", cleared is True)
+        cleared = client.clear_active_alert(session_a, "unauthorized")
+        check("clear_active_alert(A, unauthorized) 성공", cleared is True)
         check("해제 시 resolved=true 재발행 1건 추가(총 2건)", len(published) == 2)
         check("재발행 envelope의 src=mechdog_d", published[1]["payload"]["src"] == "mechdog_d")
         check("재발행 payload.resolved=true", published[1]["payload"]["payload"]["resolved"] is True)
@@ -206,11 +206,14 @@ def main() -> None:
         check("해제 echo 이후에도 B/C만 활성으로 유지", active_sessions == {session_b, session_c})
 
         # --- 7) 이미 해제된 세션 A를 다시 해제하면 실패 --------------------------
-        check("이미 해제된 세션 재해제 시도는 False", client.clear_active_alert(session_a) is False)
+        check(
+            "이미 해제된 (세션 A, unauthorized) 재해제 시도는 False",
+            client.clear_active_alert(session_a, "unauthorized") is False,
+        )
 
         # --- 8) 관리자가 세션 B(B가 낸 외부 경고)를 해제 -------------------------
-        cleared_b = client.clear_active_alert(session_b)
-        check("clear_active_alert(B, 외부 발행 경고)도 성공", cleared_b is True)
+        cleared_b = client.clear_active_alert(session_b, "dialog_timeout")
+        check("clear_active_alert(B, dialog_timeout, 외부 발행 경고)도 성공", cleared_b is True)
         check("세션 B 해제 재발행도 D 명의로 나감", published[2]["payload"]["src"] == "mechdog_d")
         active_sessions = {a["session_id"] for a in state.snapshot()["active_alerts"]}
         check("세션 B 해제 후 C만 활성으로 남음", active_sessions == {session_c})

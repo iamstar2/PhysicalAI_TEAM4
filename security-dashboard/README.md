@@ -20,7 +20,8 @@ security-dashboard/
 │  ├─ templates/index.html    # 대시보드 화면
 │  └─ static/{style.css,app.js}
 ├─ tests/
-│  └─ test_alert_forwarding.py  # alert.event 구독/표시/해제 로직 회귀 테스트 (Mock, 브로커 불필요)
+│  ├─ test_alert_forwarding.py     # alert.event 구독/표시/해제 로직 회귀 테스트 (Mock, 브로커 불필요)
+│  └─ test_same_session_alerts.py # 같은 session_id에서 사유가 다른/같은 경고가 겹치는 경우 회귀 테스트
 └─ README.md
 ```
 
@@ -73,7 +74,7 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
 방지). 관리자가 "경고 해제"를 누르면 그 세션의 상태를 초기화해서, 같은 위반이
 다시 감지되면 재경보가 가능하도록 했다.
 
-### alert.event 구독 - D 자신뿐 아니라 A/B/C가 낸 경고도 표시 (2026-09-14)
+### alert.event 구독 - D 자신뿐 아니라 A/B/C가 낸 경고도 표시 (2026-09-14, 식별 기준은 2026-09-15 수정)
 
 `schema/README.md` 기준 `alert.event`는 D만 내는 메시지가 아니라 `unauthorized`
 등은 A, `dialog_timeout`/`dialog_failed`는 B, `escort_lost`는 C가 발행 주체다.
@@ -84,9 +85,19 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
   자신)면 그냥 버린다. D가 직접 낸 경고는 발행하는 순간 이미 화면 상태에
   동기적으로 반영했으므로, 구독으로 되돌아온 자기 메시지를 또 처리할 필요가 없다.
   관리자 해제로 나가는 `resolved:true` 재발행도 같은 방식으로 안전하다.
-- **동시 다발 경고**: 활성 경고를 하나의 슬롯이 아니라 `session_id`별로 따로
-  들고 있는다(`dashboard_state.active_alerts`). D 자신이 세션 X에 대해 낸 경고와
-  B가 세션 Y에 대해 낸 경고가 동시에 화면에 표시될 수 있다.
+- **활성 경고 식별 기준 = `(session_id, reason)`**: 처음에는 `session_id`만으로
+  활성 경고를 구분했는데, 같은 세션에서 D(예: `unauthorized`)와 B/C(예:
+  `dialog_timeout`)가 서로 다른 사유로 동시에 경고를 내면 서로 덮어써서 하나가
+  화면에서 통째로 사라지는 문제가 있었다(2026-09-14 재검토에서 발견,
+  `tests/test_same_session_alerts.py` 참고). `schema/README.md`의 AlertReason별
+  발행 주체표에서 각 reason이 노드 하나에 대응하도록 설계돼 있어, `session_id` +
+  `reason` 조합이면 "이 세션에서 벌어진 이 종류의 위반"을 안전하게 가리킬 수 있다.
+  이 값이 다르면(D의 판정 vs B/C의 경고) 동시에 표시되고 각각 개별 해제된다.
+- **관리자 해제 시 D 내부 판정 상태(security_state) 초기화 범위**: 해제한 경고의
+  `src`가 `mechdog_d`일 때만 그 세션의 판정 상태(`security_state.reset_status`)를
+  초기화한다. B/C가 낸 경고를 해제할 때도 무조건 초기화하면, D 자신의 활성 경고가
+  같은 세션에 아직 남아있는 상태에서 그 판정 상태가 부당하게 지워져 다음에 같은
+  판정이 들어와도 "바뀐 것"으로 오인해 중복 재발행하는 부작용이 있었다.
 - **B/C 경고 수신 시 D의 물리 동작(경고 자세 등)은 호출하지 않는다** - 표시만
   한다. 표시 외에 D가 자동으로 반응할지는 팀 확인 필요(아래 "확인 필요" 참고).
 

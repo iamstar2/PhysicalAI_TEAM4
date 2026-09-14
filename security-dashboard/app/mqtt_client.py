@@ -296,11 +296,15 @@ class SecurityDashboardClient:
 
     # --- 대시보드 버튼에서 호출하는 관리자 액션 ------------------------------
 
-    def clear_active_alert(self, session_id: str) -> bool:
-        """[경고 해제] 버튼: 지정한 세션의 활성 경고를 resolved=true로 재발행하고 D를 CLEAR_ALERT 시킨다.
+    def clear_active_alert(self, session_id: str, reason: str) -> bool:
+        """[경고 해제] 버튼: 지정한 (세션, 사유)의 활성 경고를 resolved=true로 재발행하고 D를 CLEAR_ALERT 시킨다.
 
-        2026-09-14부터 활성 경고가 세션별로 여러 개 동시에 있을 수 있어(D 자신 +
-        B/C가 다른 세션에 낸 경고) 어떤 세션을 해제할지 인자로 받는다.
+        2026-09-15부터 활성 경고를 (session_id, reason) 조합으로 식별한다 - 같은
+        세션에 사유가 다른 경고가 동시에 있을 수 있어(D 자신의 판정 + B/C가 낸
+        경고) 어느 세션의 "어떤" 경고를 해제할지 둘 다 받아야 한다. session_id만
+        받으면 그 세션에 경고가 여러 개일 때 하나만(그것도 어떤 게 지워질지 알 수
+        없게) 지워지고 나머지는 화면에서 사라진 채 다시는 해제할 수 없게 되는
+        문제가 있었다(tests/test_same_session_alerts.py 참고).
 
         새 topic이나 필드를 만들지 않고, 기존 alert.event를 resolved=true로 다시
         보내는 것으로 처리한다 (팀 예시 schema/examples/alert_event.json에도 이미
@@ -311,7 +315,7 @@ class SecurityDashboardClient:
         """
         if self.state is None:
             return False
-        active = self.state.get_active_alert(session_id)
+        active = self.state.get_active_alert(session_id, reason)
         if active is None:
             return False
 
@@ -320,14 +324,20 @@ class SecurityDashboardClient:
             session_id=session_id,
             track_id=active.get("track_id"),
             level=active["level"],
-            reason=active["reason"],
+            reason=reason,
             snapshot_path=None,
             resolved=True,
         )
-        # 이 세션의 판정 상태를 초기화 - 같은 위반이 다시 감지되면 재경보 가능해야 함
-        # (D 자신이 추적하지 않던 세션이면 security_state.reset_status가 조용히 아무것도
-        # 안 한다 - security_state.py의 reset_status 참고)
-        self.store.reset_status(session_id)
+        # D 자신이 낸 경고(vision.face/vision.ppe 판정)를 해제할 때만 그 세션의 판정
+        # 상태를 초기화한다 - 같은 위반이 다시 감지되면 재경보 가능해야 하기 때문.
+        # src가 D가 아니면(B/C가 낸 경고) D의 security_state는 애초에 이 세션의
+        # face/ppe 판정과 무관하므로 건드리지 않는다 - 만약 무조건 reset_status를
+        # 불렀다면, 같은 세션에 D 자신의 활성 경고가 "아직" 남아있는 상태에서 관리자가
+        # B/C의 경고만 해제해도 D의 내부 상태(old_status)가 지워져서, 다음에 같은
+        # 판정이 또 들어왔을 때 "안 바뀐 상태"인데도 "바뀐 것"으로 오인해 불필요한
+        # 중복 alert.event를 다시 발행하는 부작용이 있었다.
+        if active.get("src") == SRC_NODE:
+            self.store.reset_status(session_id)
         return True
 
     def trigger_emergency_stop(self) -> None:

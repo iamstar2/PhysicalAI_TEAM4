@@ -171,18 +171,20 @@ function renderActiveAlerts(alerts) {
     const clearBtn = document.createElement("button");
     clearBtn.className = "btn btn-warn";
     clearBtn.textContent = "이 경고 해제";
-    clearBtn.addEventListener("click", () => clearAlert(alert.session_id));
+    clearBtn.addEventListener("click", () => clearAlert(alert.session_id, alert.reason));
     card.appendChild(clearBtn);
 
     container.appendChild(card);
   }
 }
 
-async function clearAlert(sessionId) {
+async function clearAlert(sessionId, reason) {
+  // 활성 경고는 (session_id, reason) 조합으로 식별한다 - 같은 세션에 사유가 다른
+  // 경고가 동시에 있을 수 있어 session_id만으로는 "어떤 경고"인지 특정할 수 없다.
   const res = await fetch("/api/actions/clear_alert", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId }),
+    body: JSON.stringify({ session_id: sessionId, reason: reason }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
