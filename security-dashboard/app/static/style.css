@@ -147,6 +147,8 @@ main { padding: 20px 24px 40px; max-width: 1100px; margin: 0 auto; }
 .status-alert { background: var(--alert); animation: blink 1s infinite; }
 .status-unknown { background: var(--unknown); }
 
+.active-alerts { display: flex; flex-direction: column; gap: 12px; }
+
 .active-alert {
   border-radius: 8px;
   padding: 14px;
@@ -159,6 +161,17 @@ main { padding: 20px 24px 40px; max-width: 1100px; margin: 0 auto; }
 
 .active-alert .snapshot { margin-top: 10px; max-width: 320px; border-radius: 8px; border: 1px solid var(--border); }
 .active-alert .no-snapshot { color: var(--muted); font-style: italic; margin-top: 8px; }
+.active-alert .src-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 6px;
+}
+.active-alert .btn { margin-top: 10px; }
 
 .actions { margin-top: 14px; display: flex; gap: 10px; }
 

@@ -75,7 +75,7 @@ def create_app(mqtt_dashboard_client) -> Flask:
                 "mqtt_connected": snap["mqtt_connected"],
                 "nodes": nodes,
                 "current_visitor": current_visitor,
-                "active_alert": snap["active_alert"],
+                "active_alerts": snap["active_alerts"],
                 "recent_alerts": snap["recent_alerts"],
                 "emergency_stop": snap["emergency_stop"],
             }
@@ -102,7 +102,14 @@ def create_app(mqtt_dashboard_client) -> Flask:
 
     @app.post("/api/actions/clear_alert")
     def api_clear_alert():
-        cleared = mqtt_dashboard_client.clear_active_alert()
+        """어떤 세션의 경고를 해제할지 body(JSON)의 session_id로 받는다 - 활성 경고가
+        세션별로 여러 개 동시에 있을 수 있어(D 자신 + B/C가 다른 세션에 낸 경고)
+        예전처럼 "현재 활성 경고 하나"를 암묵적으로 가리킬 수 없다."""
+        body = request.get_json(silent=True) or {}
+        session_id = body.get("session_id")
+        if not session_id:
+            return jsonify({"ok": False, "message": "session_id가 필요합니다."}), 400
+        cleared = mqtt_dashboard_client.clear_active_alert(session_id)
         if not cleared:
             return jsonify({"ok": False, "message": "해제할 활성 경고가 없습니다."}), 400
         return jsonify({"ok": True})

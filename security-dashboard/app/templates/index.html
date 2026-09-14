@@ -57,10 +57,9 @@
     </section>
 
     <section class="card alert-card">
-      <h2>현재 경고</h2>
-      <div id="activeAlert" class="active-alert">현재 활성 경고가 없습니다.</div>
+      <h2>현재 활성 경고 <small>(D 자체 판정 + A/B/C가 발행한 경고 모두 표시)</small></h2>
+      <div id="activeAlerts" class="active-alerts">현재 활성 경고가 없습니다.</div>
       <div class="actions">
-        <button id="clearAlertBtn" class="btn btn-warn" disabled>경고 해제</button>
         <button id="emergencyStopBtn" class="btn btn-danger">긴급 정지</button>
       </div>
     </section>
@@ -71,6 +70,7 @@
         <thead>
           <tr>
             <th>시각</th>
+            <th>발행</th>
             <th>단계</th>
             <th>사유</th>
             <th>세션 / 대상</th>
@@ -78,7 +78,7 @@
           </tr>
         </thead>
         <tbody id="historyBody">
-          <tr><td colspan="5" class="empty">아직 경고 이력이 없습니다.</td></tr>
+          <tr><td colspan="6" class="empty">아직 경고 이력이 없습니다.</td></tr>
         </tbody>
       </table>
     </section>

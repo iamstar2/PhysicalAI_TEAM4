@@ -39,9 +39,18 @@ const REASON_LABEL = {
   no_vest: "안전조끼 미착용",
   face_timeout: "얼굴 판정 시간초과",
   escort_lost: "에스코트 이탈",
+  dialog_timeout: "대화 응답 시간초과",
+  dialog_failed: "목적지 확인 실패",
 };
 
 const LEVEL_LABEL = { info: "정보", warn: "경고", critical: "위험" };
+
+const SRC_LABEL = {
+  mechdog_a: "A(게이트/비전)",
+  mechdog_b: "B(대화)",
+  mechdog_c: "C(에스코트)",
+  mechdog_d: "D(보안, 나)",
+};
 
 function setText(id, text) {
   const el = document.getElementById(id);
@@ -115,54 +124,78 @@ function renderStatus(visitor) {
   el.className = "status-badge status-" + status.toLowerCase();
 }
 
-function renderActiveAlert(alert) {
-  const el = document.getElementById("activeAlert");
-  const clearBtn = document.getElementById("clearAlertBtn");
+function renderActiveAlerts(alerts) {
+  // 활성 경고가 세션별로 여러 개 동시에 있을 수 있다(D 자신의 판정 + A/B/C가 다른
+  // 세션에 대해 낸 경고) - 그래서 카드 하나가 아니라 목록으로 그리고, 해제 버튼도
+  // 카드마다(그 세션만) 따로 둔다.
+  const container = document.getElementById("activeAlerts");
+  container.innerHTML = "";
 
-  if (!alert) {
-    el.className = "active-alert";
-    el.textContent = "현재 활성 경고가 없습니다.";
-    clearBtn.disabled = true;
+  if (!alerts || alerts.length === 0) {
+    container.textContent = "현재 활성 경고가 없습니다.";
     return;
   }
 
-  clearBtn.disabled = false;
-  el.className = `active-alert has-alert level-${alert.level}`;
-  el.innerHTML = "";
+  for (const alert of alerts) {
+    const card = document.createElement("div");
+    card.className = `active-alert has-alert level-${alert.level}`;
 
-  const info = document.createElement("div");
-  info.innerHTML =
-    `<div><strong>${LEVEL_LABEL[alert.level] || alert.level}</strong> - ${REASON_LABEL[alert.reason] || alert.reason}</div>` +
-    `<div>발생 시각: ${escapeHtml(alert.ts)}</div>` +
-    `<div>세션: ${escapeHtml(alert.session_id)} / 대상: ${escapeHtml(alert.track_id || "-")}</div>`;
-  el.appendChild(info);
+    const info = document.createElement("div");
+    info.innerHTML =
+      `<div><strong>${LEVEL_LABEL[alert.level] || alert.level}</strong> - ${REASON_LABEL[alert.reason] || alert.reason} ` +
+      `<span class="src-tag">${escapeHtml(SRC_LABEL[alert.src] || alert.src)}</span></div>` +
+      `<div>발생 시각: ${escapeHtml(alert.ts)}</div>` +
+      `<div>세션: ${escapeHtml(alert.session_id)} / 대상: ${escapeHtml(alert.track_id || "-")}</div>`;
+    card.appendChild(info);
 
-  if (alert.snapshot_path) {
-    const img = document.createElement("img");
-    img.className = "snapshot";
-    img.src = "/api/snapshot?path=" + encodeURIComponent(alert.snapshot_path);
-    img.alt = "경고 스냅샷";
-    img.onerror = () => {
-      img.remove();
+    if (alert.snapshot_path) {
+      const img = document.createElement("img");
+      img.className = "snapshot";
+      img.src = "/api/snapshot?path=" + encodeURIComponent(alert.snapshot_path);
+      img.alt = "경고 스냅샷";
+      img.onerror = () => {
+        img.remove();
+        const noSnap = document.createElement("div");
+        noSnap.className = "no-snapshot";
+        noSnap.textContent = "스냅샷 없음 (파일을 찾을 수 없음)";
+        card.appendChild(noSnap);
+      };
+      card.appendChild(img);
+    } else {
       const noSnap = document.createElement("div");
       noSnap.className = "no-snapshot";
-      noSnap.textContent = "스냅샷 없음 (파일을 찾을 수 없음)";
-      el.appendChild(noSnap);
-    };
-    el.appendChild(img);
-  } else {
-    const noSnap = document.createElement("div");
-    noSnap.className = "no-snapshot";
-    noSnap.textContent = "스냅샷 없음";
-    el.appendChild(noSnap);
+      noSnap.textContent = "스냅샷 없음";
+      card.appendChild(noSnap);
+    }
+
+    const clearBtn = document.createElement("button");
+    clearBtn.className = "btn btn-warn";
+    clearBtn.textContent = "이 경고 해제";
+    clearBtn.addEventListener("click", () => clearAlert(alert.session_id));
+    card.appendChild(clearBtn);
+
+    container.appendChild(card);
   }
+}
+
+async function clearAlert(sessionId) {
+  const res = await fetch("/api/actions/clear_alert", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "경고 해제에 실패했습니다.");
+  }
+  poll();
 }
 
 function renderHistory(alerts) {
   const body = document.getElementById("historyBody");
   body.innerHTML = "";
   if (!alerts || alerts.length === 0) {
-    body.innerHTML = '<tr><td colspan="5" class="empty">아직 경고 이력이 없습니다.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="empty">아직 경고 이력이 없습니다.</td></tr>';
     return;
   }
   for (const a of alerts) {
@@ -170,6 +203,9 @@ function renderHistory(alerts) {
 
     const tdTime = document.createElement("td");
     tdTime.textContent = a.ts;
+
+    const tdSrc = document.createElement("td");
+    tdSrc.textContent = SRC_LABEL[a.src] || a.src || "-";
 
     const tdLevel = document.createElement("td");
     const levelBadge = document.createElement("span");
@@ -189,7 +225,7 @@ function renderHistory(alerts) {
     resBadge.textContent = a.resolved ? "해제됨" : "미해결";
     tdResolved.appendChild(resBadge);
 
-    tr.append(tdTime, tdLevel, tdReason, tdSession, tdResolved);
+    tr.append(tdTime, tdSrc, tdLevel, tdReason, tdSession, tdResolved);
     body.appendChild(tr);
   }
 }
@@ -213,7 +249,7 @@ async function poll() {
     renderNodes(data.nodes);
     renderVisitor(data.current_visitor);
     renderStatus(data.current_visitor);
-    renderActiveAlert(data.active_alert);
+    renderActiveAlerts(data.active_alerts);
     renderHistory(data.recent_alerts);
     renderEmergency(data.emergency_stop);
   } catch (err) {
@@ -221,15 +257,6 @@ async function poll() {
     console.error("상태 조회 실패:", err);
   }
 }
-
-document.getElementById("clearAlertBtn").addEventListener("click", async () => {
-  const res = await fetch("/api/actions/clear_alert", { method: "POST" });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    alert(data.message || "경고 해제에 실패했습니다.");
-  }
-  poll();
-});
 
 document.getElementById("emergencyStopBtn").addEventListener("click", async () => {
   const confirmed = confirm(

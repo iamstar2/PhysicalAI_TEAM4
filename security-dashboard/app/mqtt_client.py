@@ -129,7 +129,7 @@ class SecurityDashboardClient:
         print(f"[mqtt] connected (rc={rc})")
         if self.state is not None:
             self.state.set_mqtt_connected(rc == 0)
-        for msg_type in ("vision.face", "vision.ppe"):
+        for msg_type in ("vision.face", "vision.ppe", "alert.event"):
             topic, qos, _retain = topic_qos_retain(msg_type)
             client.subscribe(topic, qos=qos)
             print(f"[mqtt] subscribed: {topic} (qos={qos})")
@@ -182,8 +182,11 @@ class SecurityDashboardClient:
                     payload["node"], payload["state"], payload.get("detail"), data["ts"]
                 )
             return
+        elif msg_type == "alert.event":
+            self._handle_incoming_alert(data)
+            return
         else:
-            return  # 이 서비스는 vision.face / vision.ppe / system.health만 처리한다
+            return  # 이 서비스는 vision.face / vision.ppe / system.health / alert.event만 처리한다
 
         _print_transition(transition)
         self._handle_transition(transition)
@@ -214,6 +217,47 @@ class SecurityDashboardClient:
             )
         elif transition.new_status == NORMAL and transition.old_status in (WARNING, ALERT):
             clear_alert()  # 콘솔 표시만 함 - resolved=true 자동 발행은 안 함(해제 조건 미정, 관리자 수동 해제만 발행)
+
+    # --- alert.event 수신 (B/C 등 다른 노드가 낸 경고를 화면에 반영) -----------
+
+    def _handle_incoming_alert(self, data: dict) -> None:
+        """schema/README.md 기준 alert.event는 D뿐 아니라 A/B/C도 발행 주체가 될 수
+        있다 (unauthorized 등은 A, dialog_timeout/dialog_failed는 B, escort_lost는
+        C). 이 서비스가 alert.event 토픽 전체를 구독해서 그 경고들도 대시보드에
+        표시한다.
+
+        src == SRC_NODE(mechdog_d)인 메시지는 무시한다 - D가 직접 낸 경고는
+        _publish_alert()에서 이미 동기적으로 dashboard_state에 기록했다. 만약 여기서
+        또 record_alert()를 부르면 (1) 최근 경고 이력에 같은 경고가 중복으로 쌓이고,
+        (2) 관리자 해제로 resolved=true를 재발행한 것도 다시 받아 그걸 또 처리하려는
+        것처럼 보인다. 자기 자신이 보낸 메시지를 여기서 그냥 버리는 것만으로 재발행
+        루프나 중복 표시 걱정 없이 끊긴다 - D는 이미 처리했으니 다시 볼 필요가 없다.
+
+        B/C가 낸 경고에 대해서는 D의 물리 동작(warning_action/alert_action)을 걸지
+        않는다 - 그건 D 자신의 vision.face/vision.ppe 판정(_handle_transition)에서만
+        하는 것이고, 남의 경고에 D가 자동으로 반응할지는 아직 팀 확인이 필요하다.
+        """
+        if data["src"] == SRC_NODE:
+            return
+
+        payload = data["payload"]
+        alert = {
+            "msg_type": "alert.event",
+            "level": payload["level"],
+            "reason": payload["reason"],
+            "track_id": payload.get("track_id"),
+            "snapshot_path": payload.get("snapshot_path"),
+            "resolved": payload.get("resolved", False),
+            "session_id": data["session_id"],
+            "ts": data["ts"],
+            "src": data["src"],
+        }
+        print(
+            f"[alert] (외부: {data['src']}) session={alert['session_id']} "
+            f"{alert['level']}/{alert['reason']} resolved={alert['resolved']}"
+        )
+        if self.state is not None:
+            self.state.record_alert(alert)
 
     # --- alert.event 발행 (자동 판정 + 관리자 수동 해제 공용) -----------------
 
@@ -247,27 +291,33 @@ class SecurityDashboardClient:
         print(f"[mqtt] PUB {topic} (qos={qos}) {json.dumps(envelope, ensure_ascii=False)}")
 
         if self.state is not None:
-            self.state.record_alert({**payload, "session_id": session_id, "ts": envelope["ts"]})
+            self.state.record_alert({**payload, "session_id": session_id, "ts": envelope["ts"], "src": SRC_NODE})
         return envelope
 
     # --- 대시보드 버튼에서 호출하는 관리자 액션 ------------------------------
 
-    def clear_active_alert(self) -> bool:
-        """[경고 해제] 버튼: 현재 활성 경고를 resolved=true로 재발행하고 D를 CLEAR_ALERT 시킨다.
+    def clear_active_alert(self, session_id: str) -> bool:
+        """[경고 해제] 버튼: 지정한 세션의 활성 경고를 resolved=true로 재발행하고 D를 CLEAR_ALERT 시킨다.
+
+        2026-09-14부터 활성 경고가 세션별로 여러 개 동시에 있을 수 있어(D 자신 +
+        B/C가 다른 세션에 낸 경고) 어떤 세션을 해제할지 인자로 받는다.
 
         새 topic이나 필드를 만들지 않고, 기존 alert.event를 resolved=true로 다시
         보내는 것으로 처리한다 (팀 예시 schema/examples/alert_event.json에도 이미
-        같은 이벤트가 resolved만 바뀌어 다시 오는 패턴이 나와 있다).
+        같은 이벤트가 resolved만 바뀌어 다시 오는 패턴이 나와 있다). 이 경고를 B나
+        C가 냈더라도 재발행은 D 명의(src=mechdog_d)로 나간다 - 관리자 조작이 D
+        대시보드에서 이뤄지기 때문. B/C가 이 resolved 재발행을 자기 상태 초기화
+        신호로 실제로 참고할지는 B/C 코드가 아직 없어 확인되지 않았다(팀 확인 필요).
         """
         if self.state is None:
             return False
-        active = self.state.get_active_alert()
+        active = self.state.get_active_alert(session_id)
         if active is None:
             return False
 
         clear_alert()  # [D ROBOT] CLEAR_ALERT 콘솔 출력
         self._publish_alert(
-            session_id=active["session_id"],
+            session_id=session_id,
             track_id=active.get("track_id"),
             level=active["level"],
             reason=active["reason"],
@@ -275,7 +325,9 @@ class SecurityDashboardClient:
             resolved=True,
         )
         # 이 세션의 판정 상태를 초기화 - 같은 위반이 다시 감지되면 재경보 가능해야 함
-        self.store.reset_status(active["session_id"])
+        # (D 자신이 추적하지 않던 세션이면 security_state.reset_status가 조용히 아무것도
+        # 안 한다 - security_state.py의 reset_status 참고)
+        self.store.reset_status(session_id)
         return True
 
     def trigger_emergency_stop(self) -> None:

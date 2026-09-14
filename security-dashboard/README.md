@@ -19,6 +19,8 @@ security-dashboard/
 │  ├─ web_server.py           # Flask 라우트 (/api/state, /api/actions/*, /api/snapshot)
 │  ├─ templates/index.html    # 대시보드 화면
 │  └─ static/{style.css,app.js}
+├─ tests/
+│  └─ test_alert_forwarding.py  # alert.event 구독/표시/해제 로직 회귀 테스트 (Mock, 브로커 불필요)
 └─ README.md
 ```
 
@@ -71,6 +73,23 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
 방지). 관리자가 "경고 해제"를 누르면 그 세션의 상태를 초기화해서, 같은 위반이
 다시 감지되면 재경보가 가능하도록 했다.
 
+### alert.event 구독 - D 자신뿐 아니라 A/B/C가 낸 경고도 표시 (2026-09-14)
+
+`schema/README.md` 기준 `alert.event`는 D만 내는 메시지가 아니라 `unauthorized`
+등은 A, `dialog_timeout`/`dialog_failed`는 B, `escort_lost`는 C가 발행 주체다.
+이 서비스는 `mechdog/v1/alert/event`를 구독해서 다른 노드가 낸 경고도 화면에
+반영한다.
+
+- **중복/재발행 루프 방지**: 수신한 `alert.event`의 `src`가 `mechdog_d`(자기
+  자신)면 그냥 버린다. D가 직접 낸 경고는 발행하는 순간 이미 화면 상태에
+  동기적으로 반영했으므로, 구독으로 되돌아온 자기 메시지를 또 처리할 필요가 없다.
+  관리자 해제로 나가는 `resolved:true` 재발행도 같은 방식으로 안전하다.
+- **동시 다발 경고**: 활성 경고를 하나의 슬롯이 아니라 `session_id`별로 따로
+  들고 있는다(`dashboard_state.active_alerts`). D 자신이 세션 X에 대해 낸 경고와
+  B가 세션 Y에 대해 낸 경고가 동시에 화면에 표시될 수 있다.
+- **B/C 경고 수신 시 D의 물리 동작(경고 자세 등)은 호출하지 않는다** - 표시만
+  한다. 표시 외에 D가 자동으로 반응할지는 팀 확인 필요(아래 "확인 필요" 참고).
+
 ## 웹 대시보드
 
 ### 화면 갱신 방식: 1초 폴링
@@ -86,11 +105,15 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
 
 ### 관리자 액션
 
-- **경고 해제**: 현재 활성 경고를 찾아 `robot_commands.clear_alert()` 호출(콘솔
-  출력) + 같은 필드(level/reason/track_id/session_id)를 재사용해서
+- **경고 해제**: 활성 경고가 세션별로 여러 개 있을 수 있어(위 alert.event 구독
+  참고), 화면의 각 경고 카드에 있는 "이 경고 해제" 버튼이 `session_id`를 지정해서
+  `/api/actions/clear_alert`를 호출한다. 해당 세션에 대해 `robot_commands.clear_alert()`
+  호출(콘솔 출력) + 같은 필드(level/reason/track_id/session_id)를 재사용해서
   `resolved: true`인 `alert.event`를 MQTT로 재발행한다. 새 topic이나 필드를
   만들지 않았다 - 팀 예시(`schema/examples/alert_event.json`)에도 이미 같은
-  이벤트가 resolved만 바뀌어 다시 오는 패턴이 있다.
+  이벤트가 resolved만 바뀌어 다시 오는 패턴이 있다. B/C가 낸 경고를 해제해도
+  재발행은 D 명의(`src: mechdog_d`)로 나간다 - B/C가 이 신호를 자기 상태 초기화에
+  실제로 참고할지는 B/C 코드가 아직 없어 확인되지 않았다.
 - **긴급 정지**: 브라우저에서 `confirm()` 확인 절차를 거친 뒤
   `robot_commands.emergency_stop()`을 호출(콘솔 출력)하고 화면에 "EMERGENCY
   STOP ACTIVE" 배너를 띄운다. MQTT로 나가는 공식 메시지는 아니다(schema에
@@ -111,8 +134,32 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
   우선 선택한다 (schema에 "둘 다 미착용" 단일 reason 값이 없어서).
 - 최근 경고 20개는 메모리에만 저장한다(프로세스 재시작 시 사라짐) - DB는 최현수
   담당 서비스가 준비되면 교체.
-- 실제 MechDog SDK 연동 없음 (`robot_commands.py`는 콘솔 출력 스텁).
-- `escort.status`(에스코트 이탈)는 아직 처리하지 않는다 - vision.face/ppe만 다룸.
+- 실제 MechDog SDK 연동 없음 (`robot_commands.py`는 콘솔 출력 스텁). "2족 기립",
+  "내장 부저" 등 실물 동작은 아직 어디에도 구현돼 있지 않다 - 지금 검증된 것은
+  `tests/test_alert_forwarding.py`의 Mock MQTT 테스트뿐이며, 이를 실물 연동
+  완료로 혼동하면 안 된다.
+- `escort.status`(위치 스트림) 자체는 아직 구독/처리하지 않는다 - 다만 C가 그
+  이탈을 `alert.event`(`reason: escort_lost`)로 발행하면 2026-09-14부터는 그
+  경고 자체는 구독해서 화면에 표시한다.
 - 대시보드 자체 테스트 패널은 만들지 않았다 - 팀 공식 `tools/mock_publisher.py`를
   터미널에서 직접 실행하는 쪽이 메시지 규약을 새로 만들 위험이 없어 더 안전하다고
   판단했다.
+- **방문 횟수 표시는 아직 구현하지 않았다.** 최현수님의 DB(`access_decisions` 등)
+  조회 API가 이 저장소에 아직 정의돼 있지 않아, 가짜 숫자나 임의의 DB 연결을
+  만들지 않고 필요한 API 계약만 정리해 별도로 공유했다(팀 채널/이슈 참고, 아래
+  "확인 필요" 항목).
+
+## 확인 필요 (팀 확인 전까지 보류)
+
+- `schema/README.md`의 AlertReason 발행 주체표는 `unauthorized`/`no_helmet`/
+  `no_vest`/`face_timeout`을 **A가 직접 발행**하는 것으로 정의한다. 지금 이
+  서비스는 A 대신 vision.face/vision.ppe를 스스로 판정해서 같은 reason으로
+  D가 alert.event를 발행하는 방식으로 되어 있다(A 코드가 아직 없어 그 자리를
+  메우는 임시 구현). **A가 실제로 구현되면 A와 D가 같은 경고를 중복 발행하지
+  않도록 역할을 다시 정리해야 한다.**
+- B/C가 낸 alert.event(예: `dialog_timeout`, `escort_lost`)를 화면에 표시할 때
+  D가 자동으로 물리 동작(경고 자세 등)을 걸어야 하는지, 표시만 하면 되는지
+  아직 정해지지 않았다 - 지금은 표시만 한다.
+- 관리자가 B/C발 경고를 대시보드에서 해제하면 D 명의로 `resolved:true`를
+  재발행하는데, B/C가 이 신호를 실제로 참고해서 자기 상태를 초기화할지는
+  B/C 코드가 없어 확인 불가.
