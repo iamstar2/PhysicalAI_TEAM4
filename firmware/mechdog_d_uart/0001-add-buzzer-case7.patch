@@ -1,0 +1,22 @@
+--- a/references/03 Arduino Programming Projects/05 Serial Communication Practical Lessons/MechDog_Slave_Program/MechDog_uart/MechDog_uart.ino
++++ b/references/03 Arduino Programming Projects/05 Serial Communication Practical Lessons/MechDog_Slave_Program/MechDog_uart/MechDog_uart.ino
+@@ -166,13 +166,19 @@
+           }
+           break;
+
+         case 6: //배터리 잔량
+           if(index == 1){
+             mySerial.printf("CMD|%d|%d|$",rec_data[0],mechdog.readBattery()); //배터리 잔량 읽기
+           }
+           break;
++
++        case 7: //부저 경고 (제안 - 미검증, security-dashboard D 연동용 신규 추가, 아직 미적용)
++          if(index == 2 && rec_data[1] == 1){
++            mechdog.playTone(500, 200, false); //duty=500(기존 저전압 경보 값 재사용), 200ms, 논블로킹
++          }
++          break;
+       }
+     }
+   }
+   delay(10);
+ }

@@ -20,6 +20,8 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
+import robot_commands
+
 APP_DIR = Path(__file__).resolve().parent
 REPO_ROOT = APP_DIR.parent.parent
 
@@ -78,6 +80,11 @@ def create_app(mqtt_dashboard_client) -> Flask:
                 "active_alerts": snap["active_alerts"],
                 "recent_alerts": snap["recent_alerts"],
                 "emergency_stop": snap["emergency_stop"],
+                "robot": {
+                    "driver": robot_commands.DRIVER,
+                    "warning_active": robot_commands.is_warning_active(),
+                    "last_error": robot_commands.last_error(),
+                },
             }
         )
 

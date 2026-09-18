@@ -9,21 +9,25 @@
 ```
 security-dashboard/
 ├─ Dockerfile                # 팀 규칙: python:3.11-slim, 포트 3000 (저장소 루트를 빌드 컨텍스트로 사용)
-├─ requirements.txt          # paho-mqtt, jsonschema, Flask
+├─ requirements.txt          # paho-mqtt, jsonschema, Flask, pyserial(serial 모드 전용, 지연 import)
 ├─ app/
 │  ├─ main.py                 # 진입점 - MQTT(백그라운드 스레드) + 웹서버(메인 스레드) 함께 실행
 │  ├─ mqtt_client.py          # MQTT 구독/발행 + schema 검증 + 관리자 액션(해제/긴급정지)
 │  ├─ security_state.py       # session_id별 NORMAL/WARNING/ALERT/PENDING 판단
 │  ├─ dashboard_state.py      # 웹서버와 MQTT 스레드가 공유하는 상태(Lock으로 보호)
-│  ├─ robot_commands.py       # D 로봇 명령 인터페이스 (콘솔 출력 스텁, SDK는 나중에 교체)
+│  ├─ robot_commands.py       # D 로봇 명령 인터페이스 - mock(콘솔) / serial(실물 UART) 드라이버
 │  ├─ web_server.py           # Flask 라우트 (/api/state, /api/actions/*, /api/snapshot)
 │  ├─ templates/index.html    # 대시보드 화면
 │  └─ static/{style.css,app.js}
 ├─ tests/
-│  ├─ test_alert_forwarding.py     # alert.event 구독/표시/해제 로직 회귀 테스트 (Mock, 브로커 불필요)
-│  └─ test_same_session_alerts.py # 같은 session_id에서 사유가 다른/같은 경고가 겹치는 경우 회귀 테스트
+│  ├─ test_alert_forwarding.py      # alert.event 구독/표시/해제 로직 회귀 테스트 (Mock, 브로커 불필요)
+│  ├─ test_same_session_alerts.py  # 같은 session_id에서 사유가 다른/같은 경고가 겹치는 경우 회귀 테스트
+│  └─ test_robot_dispatch.py       # 실물 연동(고정 배치) 회귀 테스트 - Fake 시리얼만 사용, 실물 없음
 └─ README.md
 ```
+
+실물 D 로봇 펌웨어 변경 제안은 이 폴더가 아니라 저장소 루트의 `firmware/mechdog_d_uart/`에
+따로 있다(원본 `references/`는 건드리지 않는다 - 아래 "실물 D 로봇 연동" 절 참고).
 
 ## 실행 방법
 
@@ -126,10 +130,13 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
   재발행은 D 명의(`src: mechdog_d`)로 나간다 - B/C가 이 신호를 자기 상태 초기화에
   실제로 참고할지는 B/C 코드가 아직 없어 확인되지 않았다.
 - **긴급 정지**: 브라우저에서 `confirm()` 확인 절차를 거친 뒤
-  `robot_commands.emergency_stop()`을 호출(콘솔 출력)하고 화면에 "EMERGENCY
-  STOP ACTIVE" 배너를 띄운다. MQTT로 나가는 공식 메시지는 아니다(schema에
-  해당 msg_type 없음). 배너 옆 "해제" 버튼은 순수 UI 상태 초기화용으로, 이것도
-  MQTT 메시지를 만들지 않는다.
+  `robot_commands.emergency_stop()`을 호출하고 화면에 "EMERGENCY STOP ACTIVE"
+  배너를 띄운다. MQTT로 나가는 공식 메시지는 아니다(schema에 해당 msg_type
+  없음). 배너 옆 "해제" 버튼은 순수 UI 상태 초기화용으로, 이것도 MQTT 메시지를
+  만들지 않는다. **주의**: 이 단계의 EMERGENCY_STOP은 실제 전원 차단이 아니다 -
+  로봇이 이동하지 않는 고정 배치라서, 할 수 있는 건 부저 반복 중지 +
+  `normal_attitude` 요청뿐이다(화면에도 동일하게 표시, 아래 "실물 D 로봇 연동"
+  참고).
 
 ### system.health 구독
 
@@ -139,16 +146,90 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
 없는 노드는 화면에 `UNKNOWN`으로 표시하고, 가짜로 `ONLINE`이라고 표시하지
 않는다.
 
+## 실물 D 로봇 연동 (고정 배치, Serial) — 2026-09-17
+
+**시나리오**: D는 A 바로 옆에 고정 배치되고 이동하지 않는다. A는 vision.face/
+vision.ppe 판정 결과만 발행하고, 이 서비스가 그걸로 NORMAL/WARNING/ALERT/PENDING을
+판정해 `alert.event`를 낸다(1단계 통합시험 기준 - A는 아직 alert.event를 직접
+발행하지 않는다). 미인가/PPE 미착용이면 실물 MechDog D가 `stand_two_legs` 자세와
+내장 부저 경고를 실행한다.
+
+### 드라이버: `MECHDOG_D_DRIVER=mock|serial`
+
+`robot_commands.py`는 두 드라이버만 지원한다. 실물이 없는 팀원 환경에서도 아무
+환경변수 없이 그대로 실행하면 지금까지와 똑같이 **mock(콘솔 출력)**으로 동작한다.
+
+| 환경변수 | 기본값 | 설명 |
+|---|---|---|
+| `MECHDOG_D_DRIVER` | `mock` | `mock`(콘솔만) 또는 `serial`(실제 UART로 CMD 전송) |
+| `MECHDOG_D_SERIAL_PORT` | (없음) | `serial` 모드일 때 **필수**. 임의 기본값(COM3 등)을 두지 않는다 - 잘못된 포트로 실수 전송하는 사고를 피하기 위해서다. 없으면 시작 시 에러. |
+| `MECHDOG_D_SERIAL_BAUD` | `9600` | `MechDog_uart.ino`의 `mySerial.begin(9600, ...)`과 일치시켜야 함 |
+| `MECHDOG_D_BUZZER_INTERVAL_S` | `1.0` | 부저 원샷(200ms) 재전송 간격(초) |
+
+### 물리 상태: 세션이 아니라 로봇 전체 기준(전역)
+
+로봇이 1대뿐이고 이동하지 않으므로, "경고 자세+부저"는 세션별이 아니라 **로봇
+전체에 걸린 물리 상태 하나**다.
+
+- **최초 진입(1회만)**: 어떤 세션이든 처음 WARNING/ALERT로 전이해서 D 소유
+  활성 경고가 생기면 `stand_two_legs`(`"CMD|2|1|6|$"`)를 보내고 부저 반복
+  스레드를 시작한다. `robot_commands.start_buzzer_and_posture()`가 부저 스레드가
+  이미 살아있으면 아무 것도 하지 않고 즉시 반환하므로, 같은 세션에 사유가
+  추가되거나(예: no_helmet 이후 unauthorized 추가) 다른 세션이 겹쳐도(예: 서로
+  다른 방문자가 동시에 미인가로 감지) `stand_two_legs`는 다시 전송되지 않는다.
+- **복귀는 전역 카운트 기준**: 관리자가 (session_id, reason) 하나를 해제해도,
+  `dashboard_state.count_d_owned_active_alerts("mechdog_d")`가 0이 될 때만
+  `stop_buzzer_and_return_posture()`(부저 중지 + `"CMD|2|1|16|$"` normal_attitude)를
+  부른다. 다른 세션에 D 소유 경고가 남아있으면 그대로 경고 상태를 유지한다 -
+  세션 하나만 보고 판단하면 다른 세션의 위반을 무시하고 복귀해버리는 오판이
+  생기기 때문이다.
+- **A의 자동 NORMAL 재판정으로는 절대 종료되지 않는다**: 재검사를 통과해서
+  `security_state`가 다시 NORMAL이 되어도 물리 경고는 그대로 유지된다. 오직
+  관리자의 수동 해제(`/api/actions/clear_alert`)만이 종료 조건이다.
+- **B/C가 낸 alert.event는 표시만 하고 물리 동작을 걸지 않는다** - 이전에는
+  "확인 필요" 항목이었는데 이번 정책으로 확정됐다(아래 참고).
+
+### CMD 프로토콜 문자열의 근거
+
+추측하지 않고 `references/03 Arduino Programming Projects/05 Serial
+Communication Practical Lessons/MechDog_Slave_Program/MechDog_uart/MechDog_uart.ino`의
+실제 파싱 로직만 근거로 삼았다:
+
+- `stand_two_legs`: `"CMD|2|1|6|$"` (case 2 "동작 그룹 호출" + actions_flg==1의
+  case 6이 `action_run("stand_two_legs")`)
+- `normal_attitude`: `"CMD|2|1|16|$"` (같은 경로의 case 16)
+- 부저: **이 펌웨어에는 아직 부저 명령이 없다.** `MechDog` 클래스가 `PowerBuzzer`를
+  이미 상속하고 있어(`HW_MechDog.h:28`) `mechdog.playTone(duty, btime, state)`
+  (`Hiwonder.cpp:148`)를 바로 호출할 수 있지만, 시리얼 프로토콜에 그 호출을
+  연결하는 case가 빠져 있다. `firmware/mechdog_d_uart/`에 `case 7`을 추가하는
+  패치를 제안해 뒀다(`"CMD|7|1|$"` = 200ms 논블로킹 원샷) - **원본
+  `references/`는 수정하지 않았고, 이 패치는 아직 ESP32에 적용/업로드되지
+  않았다.** 부저는 원샷이라(`Buzzer_Task`가 200ms 뒤 자동으로 끔) "계속
+  울리기"는 PC 쪽에서 반복 전송으로 구현한다(`robot_commands._buzzer_loop`).
+
+### 안전장치
+
+- **Lock**: 자세 명령(`_send`)과 부저 반복 스레드가 같은 시리얼 포트에 동시에
+  쓰지 않도록 `robot_commands._write_lock` 하나를 공유한다.
+- **Serial 실패 격리**: `_send()`는 어떤 예외든 밖으로 던지지 않고 로그만
+  남긴다(`robot_commands.last_error()`로 조회 가능, 화면에도 표시). MQTT 콜백
+  스레드나 대시보드 프로세스가 시리얼 오류로 죽지 않는다.
+- **적용 전 필수 확인**: `firmware/mechdog_d_uart/README.md`에 정리한 3가지
+  (플래시 백업, GPIO32/33 핀 배선 확인, 실제 로봇 펌웨어와 참고 예제 일치
+  여부)가 확인되기 전까지 패치를 업로드하지 않는다.
+
 ## 알려진 단순화 / 아직 안 한 것
 
 - PPE `helmet`과 `vest`가 동시에 fail이면 `alert.event.reason`은 `no_helmet`을
   우선 선택한다 (schema에 "둘 다 미착용" 단일 reason 값이 없어서).
 - 최근 경고 20개는 메모리에만 저장한다(프로세스 재시작 시 사라짐) - DB는 최현수
   담당 서비스가 준비되면 교체.
-- 실제 MechDog SDK 연동 없음 (`robot_commands.py`는 콘솔 출력 스텁). "2족 기립",
-  "내장 부저" 등 실물 동작은 아직 어디에도 구현돼 있지 않다 - 지금 검증된 것은
-  `tests/test_alert_forwarding.py`의 Mock MQTT 테스트뿐이며, 이를 실물 연동
-  완료로 혼동하면 안 된다.
+- **실물 MechDog SDK 연동은 아직 검증되지 않았다.** `robot_commands.py`가
+  `MECHDOG_D_DRIVER=serial`일 때 실제 시리얼 명령을 만들어 보내는 코드는
+  생겼지만(위 "실물 D 로봇 연동" 참고), ESP32에 부저 패치를 업로드한 적도,
+  실제 로봇에 명령을 보낸 적도 없다 - 지금 검증된 것은 `tests/test_alert_forwarding.py`,
+  `tests/test_same_session_alerts.py`, `tests/test_robot_dispatch.py`의 Mock/Fake
+  테스트뿐이며, 이를 실물 연동 완료로 혼동하면 안 된다.
 - `escort.status`(위치 스트림) 자체는 아직 구독/처리하지 않는다 - 다만 C가 그
   이탈을 `alert.event`(`reason: escort_lost`)로 발행하면 2026-09-14부터는 그
   경고 자체는 구독해서 화면에 표시한다.
@@ -168,9 +249,11 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
   D가 alert.event를 발행하는 방식으로 되어 있다(A 코드가 아직 없어 그 자리를
   메우는 임시 구현). **A가 실제로 구현되면 A와 D가 같은 경고를 중복 발행하지
   않도록 역할을 다시 정리해야 한다.**
-- B/C가 낸 alert.event(예: `dialog_timeout`, `escort_lost`)를 화면에 표시할 때
-  D가 자동으로 물리 동작(경고 자세 등)을 걸어야 하는지, 표시만 하면 되는지
-  아직 정해지지 않았다 - 지금은 표시만 한다.
+- ~~B/C가 낸 alert.event를 화면에 표시할 때 D가 자동으로 물리 동작을 걸어야
+  하는지~~ — **2026-09-17 정책으로 확정**: 표시만 하고 물리 동작(자세/부저)은
+  걸지 않는다.
 - 관리자가 B/C발 경고를 대시보드에서 해제하면 D 명의로 `resolved:true`를
   재발행하는데, B/C가 이 신호를 실제로 참고해서 자기 상태를 초기화할지는
   B/C 코드가 없어 확인 불가.
+- `firmware/mechdog_d_uart/`의 부저 case 7 패치를 실제로 ESP32에 적용할지,
+  적용한다면 언제/누가 백업·업로드를 진행할지 팀 확인 필요.

@@ -120,6 +120,12 @@ main { padding: 20px 24px 40px; max-width: 1100px; margin: 0 auto; }
 
 .card h2 { margin-top: 0; font-size: 16px; }
 
+.robot-status-card { font-size: 14px; }
+.robot-status { line-height: 1.6; }
+.robot-status.has-error { color: var(--alert); }
+.robot-status .robot-error { color: var(--alert); font-weight: 600; margin-top: 4px; }
+.robot-status-note { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
 .main-grid {
   display: grid;
   grid-template-columns: 1.3fr 1fr;

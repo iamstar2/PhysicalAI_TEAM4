@@ -216,7 +216,15 @@ class SecurityDashboardClient:
                 snapshot_path=transition.snapshot_path,
             )
         elif transition.new_status == NORMAL and transition.old_status in (WARNING, ALERT):
-            clear_alert()  # 콘솔 표시만 함 - resolved=true 자동 발행은 안 함(해제 조건 미정, 관리자 수동 해제만 발행)
+            # 2026-09-17: 여기서 clear_alert()(실물 부저 중지+normal_attitude)를 부르지
+            # 않는다 - A가 재검사로 NORMAL을 다시 보내도 물리 경고는 자동 종료하면 안
+            # 된다(정책: 관리자 수동 해제만이 종료 조건). resolved=true 자동 발행도 안
+            # 함(해제 조건 미정, 관리자 수동 해제만 발행) - 로그만 남긴다.
+            print(
+                f"[state] session={transition.session_id} 판정은 정상으로 돌아왔지만, "
+                "활성 경고가 남아있으면 물리 경고(자세+부저)는 유지됩니다 "
+                "(관리자 수동 해제 필요)"
+            )
 
     # --- alert.event 수신 (B/C 등 다른 노드가 낸 경고를 화면에 반영) -----------
 
@@ -233,9 +241,10 @@ class SecurityDashboardClient:
         것처럼 보인다. 자기 자신이 보낸 메시지를 여기서 그냥 버리는 것만으로 재발행
         루프나 중복 표시 걱정 없이 끊긴다 - D는 이미 처리했으니 다시 볼 필요가 없다.
 
-        B/C가 낸 경고에 대해서는 D의 물리 동작(warning_action/alert_action)을 걸지
-        않는다 - 그건 D 자신의 vision.face/vision.ppe 판정(_handle_transition)에서만
-        하는 것이고, 남의 경고에 D가 자동으로 반응할지는 아직 팀 확인이 필요하다.
+        B/C가 낸 경고에 대해서는 D의 물리 동작(warning_action/alert_action, 즉
+        stand_two_legs+부저)을 걸지 않는다 - 그건 D 자신의 vision.face/vision.ppe
+        판정(_handle_transition)에서만 하는 것이다. 2026-09-17 정책으로 "B/C 경고는
+        표시만 하고 물리 동작은 실행하지 않는다"가 확정됐다.
         """
         if data["src"] == SRC_NODE:
             return
@@ -319,7 +328,6 @@ class SecurityDashboardClient:
         if active is None:
             return False
 
-        clear_alert()  # [D ROBOT] CLEAR_ALERT 콘솔 출력
         self._publish_alert(
             session_id=session_id,
             track_id=active.get("track_id"),
@@ -338,6 +346,14 @@ class SecurityDashboardClient:
         # 중복 alert.event를 다시 발행하는 부작용이 있었다.
         if active.get("src") == SRC_NODE:
             self.store.reset_status(session_id)
+
+        # 2026-09-17: 로봇이 A 옆에 고정 배치라 이동/세션 잠금이 없다 - "경고 자세+
+        # 부저"는 세션이 아니라 로봇 전체에 걸린 물리 상태 하나뿐이다. 그래서 지금
+        # 해제한 (session_id, reason) 하나만 보고 바로 복귀시키면 안 되고, D 소유
+        # 활성 경고가 "전역적으로" 0개가 됐을 때만 부저를 끄고 normal_attitude로
+        # 돌아간다(다른 세션에 D 경고가 남아있으면 계속 경고 상태 유지).
+        if self.state.count_d_owned_active_alerts(SRC_NODE) == 0:
+            clear_alert()  # [D ROBOT] CLEAR_ALERT - 부저 중지 + normal_attitude
         return True
 
     def trigger_emergency_stop(self) -> None:

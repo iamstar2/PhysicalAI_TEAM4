@@ -237,6 +237,24 @@ function renderEmergency(active) {
   banner.hidden = !active;
 }
 
+function renderRobotStatus(robot) {
+  const el = document.getElementById("robotStatus");
+  if (!robot) {
+    el.textContent = "확인 중...";
+    el.className = "robot-status";
+    return;
+  }
+  const driverLabel = robot.driver === "serial" ? "SERIAL(실물)" : "MOCK(콘솔만)";
+  const postureLabel = robot.warning_active ? "경고 자세+부저 작동 중" : "기본 자세(대기)";
+  el.className = "robot-status" + (robot.last_error ? " has-error" : "");
+  el.innerHTML =
+    `<div>드라이버: <strong>${escapeHtml(driverLabel)}</strong></div>` +
+    `<div>현재 물리 상태: <strong>${escapeHtml(postureLabel)}</strong></div>` +
+    (robot.last_error
+      ? `<div class="robot-error">⚠ 마지막 전송 오류: ${escapeHtml(robot.last_error)}</div>`
+      : "");
+}
+
 function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = value == null ? "" : String(value);
@@ -254,6 +272,7 @@ async function poll() {
     renderActiveAlerts(data.active_alerts);
     renderHistory(data.recent_alerts);
     renderEmergency(data.emergency_stop);
+    renderRobotStatus(data.robot);
   } catch (err) {
     renderMqtt(false);
     console.error("상태 조회 실패:", err);
@@ -262,7 +281,9 @@ async function poll() {
 
 document.getElementById("emergencyStopBtn").addEventListener("click", async () => {
   const confirmed = confirm(
-    "정말로 긴급 정지를 실행하시겠습니까?\n이 동작은 D 로봇에 EMERGENCY_STOP 명령을 보냅니다."
+    "정말로 긴급 정지를 실행하시겠습니까?\n" +
+      "주의: 실제 전원 차단이 아니라 부저 반복 중지 + normal_attitude(기본 자세) " +
+      "명령만 보냅니다(로봇은 이동하지 않음)."
   );
   if (!confirmed) return;
   await fetch("/api/actions/emergency_stop", { method: "POST" });

@@ -1,3 +1,4 @@
 paho-mqtt>=1.6,<2
 jsonschema>=4.20,<5
 Flask>=3.0,<4
+pyserial>=3.5,<4  # MECHDOG_D_DRIVER=serial일 때만 실제로 import됨(지연 import) - mock 모드는 이 패키지 없이도 동작

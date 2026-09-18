@@ -71,6 +71,20 @@ class DashboardState:
         with self._lock:
             return self.active_alerts.get((session_id, reason))
 
+    def count_d_owned_active_alerts(self, src_node: str) -> int:
+        """src_node(=mechdog_d)가 낸 활성 경고가 전역적으로 몇 개 남았는지 센다.
+
+        2026-09-17: D 로봇을 A 옆에 고정 배치하기로 하면서(이동 없음) "경고
+        자세+부저"는 세션별이 아니라 로봇 전체에 걸린 물리 상태 하나뿐이다.
+        그래서 "이 세션의 D 경고가 다 해제됐는지"가 아니라 "세션 전체를 통틀어
+        D 소유 활성 경고가 하나도 없는지"를 물어야 한다 - 세션 A만 보고
+        판단하면, 세션 B에 아직 D 경고가 남아있는데도 정상 자세로 복귀시키는
+        오판을 할 수 있다(mqtt_client.clear_active_alert에서 이 값을 확인한
+        뒤에만 부저를 끄고 normal_attitude를 보낸다).
+        """
+        with self._lock:
+            return sum(1 for alert in self.active_alerts.values() if alert.get("src") == src_node)
+
     def set_emergency_stop(self, value: bool) -> None:
         with self._lock:
             self.emergency_stop = value

@@ -21,6 +21,16 @@
   </div>
 
   <main>
+    <section class="card robot-status-card">
+      <h2>D 로봇 연결 상태</h2>
+      <div id="robotStatus" class="robot-status">확인 중...</div>
+      <div class="robot-status-note">
+        ※ "긴급 정지"는 이 단계에서 실제 전원 차단이 아니라, 부저 반복을 멈추고
+        기본 자세(normal_attitude)로 돌아가라는 명령만 보냅니다. 로봇은 A 옆에
+        고정 배치되어 있으며 이동 기능은 구현돼 있지 않습니다.
+      </div>
+    </section>
+
     <section class="node-row">
       <div class="node-card" data-node="mechdog_a">
         <div class="node-name">MechDog A <small>(게이트/비전)</small></div>
