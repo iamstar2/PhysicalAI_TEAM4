@@ -1,0 +1,13 @@
+# Reconstructed read-only from the real backup (mechdog_d_factory_backup_A.bin).
+# None of the stock Arduino-ESP32 CSVs (default_ffat.csv etc.) match exactly -
+# those are dual-OTA (otadata/ota_0/ota_1) layouts, but the real backup is a
+# single "factory" app with no OTA. Values below are exactly what was parsed
+# from the backup's partition table at offset 0x8000 (ASCII-only comments here
+# to avoid a cp949 decode crash in PlatformIO's partition-size checker on this
+# Korean-locale Windows machine when it saw non-ASCII text - the Korean version
+# of this file is documented in firmware/mechdog_d_uart/README.md instead).
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x6000,
+phy_init,   data, phy,     0xf000,   0x1000,
+factory,    app,  factory, 0x10000,  0x1f0000,
+vfs,        data, fat,     0x200000, 0x200000,

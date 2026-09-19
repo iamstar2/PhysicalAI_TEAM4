@@ -10,6 +10,11 @@ pad/
 zip/
 .pio/
 
+# D 로봇 펌웨어 로컬 컴파일 검증용 스크래치(개인 PC 절대경로가 로그에 남고,
+# .pio 툴체인 캐시·빌드 바이너리가 커서 추적하지 않음) - 정식 패치/README/
+# tools/partitions는 firmware/mechdog_d_uart/ 아래 그대로 추적됨
+firmware/mechdog_d_uart/build/
+
 # 개인 작업 산출물 · 회의록 (팀 내부 공유용, 공용 저장소에는 안 올림)
 work_docs/
 
