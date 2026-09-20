@@ -1,0 +1,13 @@
+{
+  "ver": 1,
+  "msg_id": "189c5425236a41f5a73bc6a89177da68",
+  "ts": "2026-09-21T14:03:12.481000+09:00",
+  "src": "dashboard",
+  "session_id": "sess-20260921140258-mechdog_a-3f9c1d02",
+  "payload": {
+    "msg_type": "robot.command",
+    "dst": "mechdog_d",
+    "action": "warning_start",
+    "reason": "no_helmet"
+  }
+}

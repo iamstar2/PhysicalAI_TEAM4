@@ -24,7 +24,8 @@
         { "$ref": "#/$defs/DialogResultPayload" },
         { "$ref": "#/$defs/EscortStatusPayload" },
         { "$ref": "#/$defs/AlertEventPayload" },
-        { "$ref": "#/$defs/SystemHealthPayload" }
+        { "$ref": "#/$defs/SystemHealthPayload" },
+        { "$ref": "#/$defs/RobotCommandPayload" }
       ]
     }
   },
@@ -45,6 +46,8 @@
     },
     "PpeItem": { "type": "string", "enum": ["helmet", "vest"] },
     "AlertLevel": { "type": "string", "enum": ["info", "warn", "critical"] },
+    "RobotAction": { "type": "string", "enum": ["warning_start", "warning_clear"],
+      "description": "경고 시작/해제. 실제 동작 문자열(CMD|2|1|6|$ 등)은 노드 내부 구현이라 스키마에 두지 않는다." },
     "AlertReason": {
       "type": "string",
       "enum": ["unauthorized", "no_helmet", "no_vest", "face_timeout", "escort_lost", "dialog_timeout", "dialog_failed"]
@@ -172,6 +175,18 @@
         "node": { "$ref": "#/$defs/Node" },
         "state": { "$ref": "#/$defs/NodeState" },
         "detail": { "type": ["string", "null"], "default": null }
+      }
+    }
+    ,
+    "RobotCommandPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["msg_type", "dst", "action"],
+      "properties": {
+        "msg_type": { "const": "robot.command" },
+        "dst": { "$ref": "#/$defs/Node", "description": "명령을 받을 노드. 봉투는 6필드 고정이라 여기에 둔다." },
+        "action": { "$ref": "#/$defs/RobotAction" },
+        "reason": { "$ref": "#/$defs/AlertReason", "description": "어떤 경고 때문인지 (선택)" }
       }
     }
   }
