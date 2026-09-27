@@ -87,6 +87,10 @@ def build_phrases() -> dict[str, str]:
         add(f"confirm_{key}", spec["확인"])       # 목적지가 맞는지 되묻기
         add(f"where_{key}", spec["위치"])         # 위치 알려주기 + "직접 안내해 드릴까요?"
         add(f"escort_{key}", spec["에스코트"])    # 에스코트 수락 시에만
+        # C 가 안내 중일 때. `위치` 에서 제안 문장만 뺀 것이라 **따로 파일이 필요하다** —
+        # 한 파일에 위치와 제안이 같이 들어 있어서 재생 중에 잘라낼 수 없다 (FR-B-708).
+        if spec.get("혼잡"):
+            add(f"busy_{key}", spec["혼잡"])
     for key, spec in CONF["공통"].items():
         add(key, spec["문구"])
     # 말로만 알려주는 장소(화장실·계단 …). 문구가 비어 있으면 건너뛴다 —

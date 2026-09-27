@@ -30,6 +30,13 @@ T_SESSION = "mechdog/v1/gate/session"
 T_RESULT = "mechdog/v1/dialog/result"
 T_ALERT = "mechdog/v1/alert/event"
 T_HEALTH = "mechdog/v1/system/health/mechdog_b"
+# C 가 지금 안내를 받을 수 있는지 본다 (FR-B-708). retain=true 라 붙자마자 마지막 값이 온다.
+# **C 자료에는 토픽이 `escort/status` 로 적혀 있다.** 다르면 구독해도 조용히 아무것도
+# 안 오므로(에러도 안 난다) 실측으로 확인해야 한다 — `ESCORT_TOPIC` 으로 바꿔 끼운다.
+T_ESCORT = os.environ.get("ESCORT_TOPIC", "mechdog/v1/escort/status")
+
+# 1 Hz 스트림이라 이만큼 조용하면 "모른다"로 본다. 오래된 값으로 판단하지 않기 위함.
+ESCORT_STALE_S = 3.0
 
 KST = timezone(timedelta(hours=9))
 QUEUE_MAX = 10          # 04 §4.6
@@ -75,6 +82,9 @@ class Bus:
         self.distance_at = 0.0
         self.sessions: deque[dict] = deque(maxlen=4)
 
+        self.escort_state: str | None = None   # idle / moving / arrived / aborted
+        self.escort_at = 0.0
+
     # ---- 연결 ------------------------------------------------------------
     def connect(self, timeout_s: float = 5.0) -> bool:
         try:
@@ -117,6 +127,7 @@ class Bus:
     def _on_connect(self, client, userdata, flags, rc, properties=None) -> None:
         for t in (T_TOUCH, T_ULTRA, T_SESSION):
             client.subscribe(t, qos=1)
+        client.subscribe(T_ESCORT, qos=0)      # 상태 스트림이라 QoS 0 (schema/README §8)
         self._flush()
         self.publish_health("ready")
 
@@ -141,6 +152,15 @@ class Bus:
 
         elif msg.topic == T_SESSION:
             self.sessions.append(d)
+
+        elif msg.topic == T_ESCORT:
+            # 봉투 안에 payload 가 들어 있다. C 가 봉투 없이 바로 보낼 수도 있어
+            # 양쪽 다 받는다 — 스키마가 확정되기 전이라 관대하게 읽는다.
+            p = d.get("payload") if isinstance(d.get("payload"), dict) else d
+            st = p.get("state")
+            if isinstance(st, str):
+                self.escort_state = st
+                self.escort_at = time.time()
 
     # ---- 발행 ------------------------------------------------------------
     def _send(self, topic: str, doc: dict) -> bool:
@@ -230,6 +250,22 @@ class Bus:
                 return None          # 센서가 끊겼다 — 부재로 단정하지 않는다
             return False
         return self.distance_cm <= max_cm
+
+    def escort_ready(self) -> bool:
+        """C 가 지금 안내를 받을 수 있나 (`FR-B-708`).
+
+        **`idle` 일 때만 True 다.** `moving`·`arrived`·`aborted` 는 전부 "못 받음"으로
+        똑같이 본다 — B 가 구분할 이유가 없다.
+
+        값을 한 번도 못 받았거나 3초 넘게 조용하면 **False** 다. 1 Hz 스트림이라
+        조용하다는 건 모른다는 뜻이고, 모를 때 제안하면 못 지킬 약속을 하게 된다.
+        대화 자체는 멈추지 않고 위치 안내로 진행한다 (`AC-708-4`).
+        """
+        if self.escort_state is None:
+            return False
+        if time.time() - self.escort_at > ESCORT_STALE_S:
+            return False
+        return self.escort_state == "idle"
 
     def wait_touch(self, timeout_s: float) -> bool:
         """누름 전이를 기다린다. 이미 누르고 있는 상태는 새 누름이 아니다."""

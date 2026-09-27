@@ -352,6 +352,18 @@ class Session:
         수락하지 않으면 `dialog.result` 를 **발행하지 않는다.** C 가 움직일 이유가 없고,
         방문자는 이미 위치를 들었다. 거절 자체는 이상 상황이 아니라 `alert.event` 도 안 보낸다.
         """
+        # ㉖-1 — C 가 받을 수 있을 때만 제안한다 (`FR-B-708`).
+        # 안내 중·복귀 중인데 "직접 안내해 드릴까요" 를 물으면 **못 지킬 약속**이 된다.
+        # B 는 dialog.result 를 던지고 응답을 확인하지 않으므로 실패를 영영 모른다.
+        if not self.bus.escort_ready():
+            print(f"  [에스코트] 건너뜀 — 안내견 상태 {self.bus.escort_state or '모름'}")
+            say(f"busy_{dest}")
+            self.served = True
+            self.opened = False
+            self.started = time.time()
+            say("closing")
+            return LOOP_BACK
+
         say(f"where_{dest}")
         ans = listen(f"escort_{self.attempt}", no_speech_s=7.0)
         # **긍정일 때만 수락이다.** 나머지는 전부 사양으로 본다 —
