@@ -15,7 +15,7 @@ security-dashboard/
 │  ├─ mqtt_client.py          # MQTT 구독/발행 + schema 검증 + 관리자 액션(해제/긴급정지)
 │  ├─ security_state.py       # session_id별 NORMAL/WARNING/ALERT/PENDING 판단
 │  ├─ dashboard_state.py      # 웹서버와 MQTT 스레드가 공유하는 상태(Lock으로 보호)
-│  ├─ robot_commands.py       # D 로봇 명령 인터페이스 - mock(콘솔) / serial(실물 UART) 드라이버
+│  ├─ robot_commands.py       # D 로봇 명령 인터페이스 - mock(콘솔) / serial(레거시) / udp(실물, 검증됨) 드라이버
 │  ├─ web_server.py           # Flask 라우트 (/api/state, /api/actions/*, /api/snapshot)
 │  ├─ templates/index.html    # 대시보드 화면
 │  └─ static/{style.css,app.js}
@@ -146,7 +146,7 @@ docker run -d --name security-dashboard --network <mosquitto와 같은 네트워
 없는 노드는 화면에 `UNKNOWN`으로 표시하고, 가짜로 `ONLINE`이라고 표시하지
 않는다.
 
-## 실물 D 로봇 연동 (고정 배치, Serial) — 2026-09-17
+## 실물 D 로봇 연동 (고정 배치, WiFi/UDP) — 2026-09-27 갱신
 
 **시나리오**: D는 A 바로 옆에 고정 배치되고 이동하지 않는다. A는 vision.face/
 vision.ppe 판정 결과만 발행하고, 이 서비스가 그걸로 NORMAL/WARNING/ALERT/PENDING을
@@ -154,17 +154,27 @@ vision.ppe 판정 결과만 발행하고, 이 서비스가 그걸로 NORMAL/WARN
 발행하지 않는다). 미인가/PPE 미착용이면 실물 MechDog D가 `stand_two_legs` 자세와
 내장 부저 경고를 실행한다.
 
-### 드라이버: `MECHDOG_D_DRIVER=mock|serial`
+**중요한 정정(2026-09-27)**: 애초에 이 절은 D의 펌웨어가 Arduino UART 스케치이고
+COM 포트로 CMD 문자열을 보내면 그대로 파싱된다고 가정하고 작성됐었다. 실물 분해
+조사 결과 **D의 실제 펌웨어는 MicroPython**이고, COM 포트(UART0)에는 **MicroPython
+REPL만 물려 있어 CMD 파서에 전혀 도달하지 않는다** - 진짜 CMD 파서는 **WiFi 위의
+UDP 소켓(포트 9027)** 에만 있다. `serial` 드라이버는 이 사실이 밝혀지기 전에 만든
+레거시 경로라 남겨두긴 했지만 **지금 하드웨어에서 실제로 로봇을 움직이는 경로가
+아니다.** 아래 내용은 전부 새로 검증된 `udp` 드라이버 기준이다.
 
-`robot_commands.py`는 두 드라이버만 지원한다. 실물이 없는 팀원 환경에서도 아무
+### 드라이버: `MECHDOG_D_DRIVER=mock|serial|udp`
+
+`robot_commands.py`는 세 드라이버를 지원한다. 실물이 없는 팀원 환경에서도 아무
 환경변수 없이 그대로 실행하면 지금까지와 똑같이 **mock(콘솔 출력)**으로 동작한다.
 
 | 환경변수 | 기본값 | 설명 |
 |---|---|---|
-| `MECHDOG_D_DRIVER` | `mock` | `mock`(콘솔만) 또는 `serial`(실제 UART로 CMD 전송) |
-| `MECHDOG_D_SERIAL_PORT` | (없음) | `serial` 모드일 때 **필수**. 임의 기본값(COM3 등)을 두지 않는다 - 잘못된 포트로 실수 전송하는 사고를 피하기 위해서다. 없으면 시작 시 에러. |
-| `MECHDOG_D_SERIAL_BAUD` | `9600` | `MechDog_uart.ino`의 `mySerial.begin(9600, ...)`과 일치시켜야 함 |
-| `MECHDOG_D_BUZZER_INTERVAL_S` | `1.0` | 부저 원샷(200ms) 재전송 간격(초) |
+| `MECHDOG_D_DRIVER` | `mock` | `mock`(콘솔만) / `serial`(레거시, 실제 CMD 파서에 닿지 않음) / `udp`(실물, 검증된 경로) |
+| `MECHDOG_D_SERIAL_PORT` | (없음) | `serial` 모드일 때 **필수**. 임의 기본값(COM3 등)을 두지 않는다. |
+| `MECHDOG_D_SERIAL_BAUD` | `9600` | 레거시 값 그대로 유지(현재 실제 CMD 경로와 무관) |
+| `MECHDOG_D_UDP_HOST` | (없음) | `udp` 모드일 때 **필수**. 로봇의 WiFi IP(예: `192.168.137.63`) - 잘못된 IP로 실수 전송하는 사고를 피하기 위해 임의 기본값을 두지 않는다. |
+| `MECHDOG_D_UDP_PORT` | `9027` | 로봇 MicroPython `main.py`의 `wifi.port`를 REPL로 직접 읽어 확인한 고정값. 환경마다 다른 값이 아니라 이 펌웨어 자체의 프로토콜 상수라 기본값을 둠. |
+| `MECHDOG_D_UDP_TIMEOUT_S` | `0.5` | 전송 후 응답을 기다리는 시간(참고용). 실물 시험에서 이 펌웨어는 응답을 보내지 않음을 이미 확인했으므로, 이 값을 늘려도 "동작 확인"이 되지는 않는다. |
 
 ### 물리 상태: 세션이 아니라 로봇 전체 기준(전역)
 
@@ -172,51 +182,84 @@ vision.ppe 판정 결과만 발행하고, 이 서비스가 그걸로 NORMAL/WARN
 전체에 걸린 물리 상태 하나**다.
 
 - **최초 진입(1회만)**: 어떤 세션이든 처음 WARNING/ALERT로 전이해서 D 소유
-  활성 경고가 생기면 `stand_two_legs`(`"CMD|2|1|6|$"`)를 보내고 부저 반복
-  스레드를 시작한다. `robot_commands.start_buzzer_and_posture()`가 부저 스레드가
-  이미 살아있으면 아무 것도 하지 않고 즉시 반환하므로, 같은 세션에 사유가
-  추가되거나(예: no_helmet 이후 unauthorized 추가) 다른 세션이 겹쳐도(예: 서로
-  다른 방문자가 동시에 미인가로 감지) `stand_two_legs`는 다시 전송되지 않는다.
+  활성 경고가 생기면 `stand_two_legs`(`"CMD|2|1|6|$"`)와 부저 시작
+  (`"CMD|7|1|$"`)을 **각각 별개 패킷으로 1회씩** 보낸다. 두 CMD는 로봇 펌웨어
+  안에서도 서로 무관한 분기라(부저는 case 7, 자세는 case 2) 한쪽 전송 성공이
+  다른 쪽의 성공을 의미하지 않는다 - 로그에도 별도 줄로 남는다.
+  `robot_commands.start_buzzer_and_posture()`는 이미 경고 중이면 아무 것도
+  하지 않고 즉시 반환하므로, 같은 세션에 사유가 추가되거나(예: no_helmet 이후
+  unauthorized 추가) 다른 세션이 겹쳐도(예: 서로 다른 방문자가 동시에 미인가로
+  감지) 두 CMD 모두 다시 전송되지 않는다.
+  (2026-09-27 변경: 예전에는 부저를 1초마다 반복 재전송하는 스레드가 있었지만,
+  펌웨어의 `case 7`이 이제 0->1 전이에만 반응하고 반복 수신을 스스로 무시하므로
+  더 이상 필요 없어 제거했다 - 상태 전이 시점에 1회만 보낸다.)
 - **복귀는 전역 카운트 기준**: 관리자가 (session_id, reason) 하나를 해제해도,
   `dashboard_state.count_d_owned_active_alerts("mechdog_d")`가 0이 될 때만
-  `stop_buzzer_and_return_posture()`(부저 중지 + `"CMD|2|1|16|$"` normal_attitude)를
-  부른다. 다른 세션에 D 소유 경고가 남아있으면 그대로 경고 상태를 유지한다 -
-  세션 하나만 보고 판단하면 다른 세션의 위반을 무시하고 복귀해버리는 오판이
-  생기기 때문이다.
+  `stop_buzzer_and_return_posture()`(부저 정지 `"CMD|7|0|$"` + 기본 자세 복귀
+  `"CMD|2|1|99|$"`, 이것도 각각 별개 패킷)를 부른다. 다른 세션에 D 소유 경고가
+  남아있으면 그대로 경고 상태를 유지한다 - 세션 하나만 보고 판단하면 다른
+  세션의 위반을 무시하고 복귀해버리는 오판이 생기기 때문이다.
 - **A의 자동 NORMAL 재판정으로는 절대 종료되지 않는다**: 재검사를 통과해서
   `security_state`가 다시 NORMAL이 되어도 물리 경고는 그대로 유지된다. 오직
   관리자의 수동 해제(`/api/actions/clear_alert`)만이 종료 조건이다.
-- **B/C가 낸 alert.event는 표시만 하고 물리 동작을 걸지 않는다** - 이전에는
-  "확인 필요" 항목이었는데 이번 정책으로 확정됐다(아래 참고).
+- **B/C가 낸 alert.event는 표시만 하고 물리 동작을 걸지 않는다.**
 
-### CMD 프로토콜 문자열의 근거
+### CMD 프로토콜 문자열의 근거 (2026-09-27 갱신 — 실제 로봇 `main.py` 기준)
 
-추측하지 않고 `references/03 Arduino Programming Projects/05 Serial
-Communication Practical Lessons/MechDog_Slave_Program/MechDog_uart/MechDog_uart.ino`의
-실제 파싱 로직만 근거로 삼았다:
+옛 절은 `references/03 .../MechDog_uart.ino`(Arduino)를 근거로 삼았으나, 그건
+지금 로봇이 실행하는 펌웨어가 아니다. 지금 근거는
+`firmware/mechdog_d_uart/build/wifi_buzzer_candidate/main.py`(2026-09-20에 이미
+로봇 `/main.py`로 교체 완료, 다음 부팅부터 적용)의 실제 소스다:
 
-- `stand_two_legs`: `"CMD|2|1|6|$"` (case 2 "동작 그룹 호출" + actions_flg==1의
-  case 6이 `action_run("stand_two_legs")`)
-- `normal_attitude`: `"CMD|2|1|16|$"` (같은 경로의 case 16)
-- 부저: **이 펌웨어에는 아직 부저 명령이 없다.** `MechDog` 클래스가 `PowerBuzzer`를
-  이미 상속하고 있어(`HW_MechDog.h:28`) `mechdog.playTone(duty, btime, state)`
-  (`Hiwonder.cpp:148`)를 바로 호출할 수 있지만, 시리얼 프로토콜에 그 호출을
-  연결하는 case가 빠져 있다. `firmware/mechdog_d_uart/`에 `case 7`을 추가하는
-  패치를 제안해 뒀다(`"CMD|7|1|$"` = 200ms 논블로킹 원샷) - **원본
-  `references/`는 수정하지 않았고, 이 패치는 아직 ESP32에 적용/업로드되지
-  않았다.** 부저는 원샷이라(`Buzzer_Task`가 200ms 뒤 자동으로 끔) "계속
-  울리기"는 PC 쪽에서 반복 전송으로 구현한다(`robot_commands._buzzer_loop`).
+- `stand_two_legs`: `"CMD|2|1|6|$"` — WiFi 분기 `elif _COMMAND == 2`에서
+  `_ACTION_TYPE=1, _ACTION_NUM=6` -> `dong_zuo_zu_yun_xing(6)` ->
+  `action_list[6] == "stand_two_legs"` -> `doghw.action_run("stand_two_legs")`.
+- 부저 시작/해제: `"CMD|7|1|$"` / `"CMD|7|0|$"` — 새로 추가한 `elif _COMMAND == 7`
+  분기. `1`은 상태가 0일 때만 `beep.playTone(800,100,True)`를 1회 실행하고
+  상태를 1로 바꾼다(반복 수신되는 `1`은 펌웨어가 무시), `0`은 소리 없이 상태만
+  0으로 되돌린다. **`CMD|7`은 부저 상태 전이만 담당하는 별개 명령이며, 자세
+  명령의 성공/실패와는 무관하다** - 부저 전송이 성공했다고 자세 명령도
+  성공했다고 취급하면 안 된다(그 반대도 마찬가지).
+- 기본 자세 복귀: `"CMD|2|1|99|$"` — 옛 Arduino의 `case 16`(`normal_attitude`)에
+  대응하는 항목이 새 펌웨어의 `action_list`(1~15번뿐)에는 없다. 대신
+  `_ACTION_TYPE==1`일 때 항상 먼저 실행되는 `doghw.set_default_pose(duration=500)`
+  만 트리거하고 실제 `action_run()` 호출은 건너뛰도록, `dong_zuo_zu_yun_xing()`의
+  `if (dong_zuo <= 15):` 가드를 이용해 범위 밖 숫자(99)를 보낸다. **이 매핑은
+  main.py 소스 분석으로 도출했고 아직 실물로 재검증하지 않았다** - 자동
+  경로에 연결하기 전에 반드시 단독으로 먼저 시험할 것(아래 "실물 시험 순서" 참고).
 
 ### 안전장치
 
-- **Lock**: 자세 명령(`_send`)과 부저 반복 스레드가 같은 시리얼 포트에 동시에
-  쓰지 않도록 `robot_commands._write_lock` 하나를 공유한다.
-- **Serial 실패 격리**: `_send()`는 어떤 예외든 밖으로 던지지 않고 로그만
+- **Lock**: 자세 명령과 부저 명령이 같은 소켓/시리얼에 동시에 쓰지 않도록
+  `robot_commands._write_lock`을 공유하고, "이미 경고 중인가" 판단은 별도
+  `_state_lock`으로 보호한다.
+- **전송 실패 격리**: `_send()`는 어떤 예외든 밖으로 던지지 않고 로그만
   남긴다(`robot_commands.last_error()`로 조회 가능, 화면에도 표시). MQTT 콜백
-  스레드나 대시보드 프로세스가 시리얼 오류로 죽지 않는다.
-- **적용 전 필수 확인**: `firmware/mechdog_d_uart/README.md`에 정리한 3가지
-  (플래시 백업, GPIO32/33 핀 배선 확인, 실제 로봇 펌웨어와 참고 예제 일치
-  여부)가 확인되기 전까지 패치를 업로드하지 않는다.
+  스레드나 대시보드 프로세스가 전송 오류로 죽지 않는다.
+- **"전송 성공"과 "로봇 동작 확인"은 다른 말이다**: `udp` 드라이버는 `sendto()`가
+  성공하면 `SENT ...(전송 성공 - 로봇 동작은 미확인)`을 로그에 남기고, 응답이
+  오면 참고용으로만 같이 남긴다(이 펌웨어의 응답 포맷은 검증되지 않았다).
+  이 로그를 "로봇이 실제로 그 동작을 했다"는 증거로 읽으면 안 된다 - 실물
+  동작 확인은 사람이 로봇을 보고 판단해야 한다.
+
+### 실물 시험 순서 (기체를 안전하게 고정한 뒤 진행)
+
+1. 로봇 다리가 바닥에 닿지 않게 고정, 배터리 ON 상태로 안정적으로 부팅되는지 확인.
+2. 메인 컨트롤러를 1회 리셋해 `/main.py`(부저 case 7 포함 후보 코드)가 실행되게 한다 -
+   지금까지는 파일 교체만 해두고 리셋은 하지 않은 상태였다.
+3. 재부팅 후 30초 관찰 - 부트루프/Guru Meditation panic 없는지 확인.
+4. `MECHDOG_D_DRIVER=udp MECHDOG_D_UDP_HOST=<로봇 IP> python -c` 등으로
+   `robot_commands`를 직접 import해 **부저만** 단독 시험:
+   `robot_commands.configure(driver="udp", udp_host="<로봇 IP>")` 후
+   `robot_commands._send("CMD|7|1|$")` -> 부저 0.1초 1회 확인,
+   `robot_commands._send("CMD|7|0|$")` -> 상태 해제(반복 전송해도 재발음 없는지) 확인.
+5. **자세 명령은 부저와 완전히 분리해서 먼저 단독 시험한다**: `_send("CMD|2|1|6|$")`
+   -> `stand_two_legs` 실행 확인, `_send("CMD|2|1|99|$")` -> 정상 자세로
+   조용히 복귀하는지(예상치 못한 동작/예외 없는지) 확인. 이 단계에서 이상이
+   있으면 `MECHDOG_D_DRIVER=mock`으로 즉시 되돌리고 `_NORMAL_ATTITUDE_CMD` 값을
+   다시 검토한다.
+6. 4~5번이 모두 예상대로면 `MECHDOG_D_DRIVER=udp`로 대시보드를 띄우고
+   `tools/mock_publisher.py unauthorized` 등으로 종단간 시험을 진행한다.
 
 ## 알려진 단순화 / 아직 안 한 것
 
@@ -224,12 +267,18 @@ Communication Practical Lessons/MechDog_Slave_Program/MechDog_uart/MechDog_uart.
   우선 선택한다 (schema에 "둘 다 미착용" 단일 reason 값이 없어서).
 - 최근 경고 20개는 메모리에만 저장한다(프로세스 재시작 시 사라짐) - DB는 최현수
   담당 서비스가 준비되면 교체.
-- **실물 MechDog SDK 연동은 아직 검증되지 않았다.** `robot_commands.py`가
-  `MECHDOG_D_DRIVER=serial`일 때 실제 시리얼 명령을 만들어 보내는 코드는
-  생겼지만(위 "실물 D 로봇 연동" 참고), ESP32에 부저 패치를 업로드한 적도,
-  실제 로봇에 명령을 보낸 적도 없다 - 지금 검증된 것은 `tests/test_alert_forwarding.py`,
-  `tests/test_same_session_alerts.py`, `tests/test_robot_dispatch.py`의 Mock/Fake
-  테스트뿐이며, 이를 실물 연동 완료로 혼동하면 안 된다.
+- **실물 종단간 연동은 아직 완전히 검증되지 않았다.** `robot_commands.py`의
+  `udp` 드라이버로 로봇의 WiFi UDP 소켓(9027)에 패킷을 보내는 것 자체는
+  실물로 확인됐고(로봇 `wifi.rec_addr`가 PC 주소로 갱신됨), 부저 편집거리
+  전이(`Hiwonder.bz.playTone`)도 REPL 단독 호출로 0.1초 1회 울리는 것까지
+  실측했다. 하지만 (1) `main.py` 교체는 파일 전송까지만 했고 **아직 로봇을
+  리셋하지 않아 새 코드가 실행된 적이 없고**, (2) 자세 복귀용 `"CMD|2|1|99|$"`는
+  소스 분석으로만 도출했을 뿐 실물로 재검증하지 않았으며, (3) 이 UDP 경로가
+  보내는 어떤 명령에도 응답이 오지 않는다는 것만 확인했지 로봇이 실제로
+  움직이는지는 육안 확인이 필요하다 - 지금 코드로 검증된 것은
+  `tests/test_alert_forwarding.py`, `tests/test_same_session_alerts.py`,
+  `tests/test_robot_dispatch.py`의 Mock/Fake 테스트뿐이며, 이를 실물 연동
+  완료로 혼동하면 안 된다. 위 "실물 시험 순서"를 거쳐야 완료로 볼 수 있다.
 - `escort.status`(위치 스트림) 자체는 아직 구독/처리하지 않는다 - 다만 C가 그
   이탈을 `alert.event`(`reason: escort_lost`)로 발행하면 2026-09-14부터는 그
   경고 자체는 구독해서 화면에 표시한다.
