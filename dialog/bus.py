@@ -20,6 +20,8 @@ import uuid
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
+from mask import mask
+
 HOST = os.environ.get("MQTT_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MQTT_PORT", "1883"))
 
@@ -187,10 +189,12 @@ class Bus:
     def publish_result(self, session_id: str, dest: str, purpose: str,
                        confidence: float, retry_count: int) -> bool:
         """㉗ dialog.result. 스키마가 엄격해서 **여기 있는 필드가 전부**다."""
+        # **발행 직전에만 가린다** (`NFR-B-702`). 매칭·LLM 은 원문으로 해야 하므로
+        # 더 앞에서 지우면 `FR-B-405`(담당자명 추정)가 아무것도 못 찾는다.
         return self._send(T_RESULT, envelope(session_id, {
             "msg_type": "dialog.result",
             "destination": dest,
-            "purpose": purpose,
+            "purpose": mask(purpose),
             "confidence": round(float(confidence), 2),
             "retry_count": int(retry_count),
         }))

@@ -60,6 +60,8 @@ A(게이트)  ──gate.session──▶  B
 | `info_places.py` | 데려다주지 않고 **말로만 알려주는 곳** (화장실·계단 …) |
 | `bus.py` | MQTT 송수신 |
 | `eye.py` | 눈 LED 상태 발행 |
+| `dlog.py` | **대화 로그** (`FR-B-802`) — 턴·세션을 jsonl 로. **필드 이름이 `11` 공유 정의서의 DB 컬럼명과 같다** |
+| `mask.py` | **개인정보 마스킹** (`NFR-B-702`) — 이름·호칭 · 전화번호 · 일정표 host. **발행·저장 직전에만** 부른다 |
 | `gen_tts.py` | 안내 음성 생성기 (Gemini TTS → wav 캐시) |
 | **`phrases.json`** | **모든 멘트.** 문구를 고칠 때 보는 파일은 이것 하나 |
 | `schedule.json` | 시연용 방문 일정 (LLM 이 "두 시 반에 오라고 해서요" 를 풀 때 씀) |
@@ -128,7 +130,7 @@ TTS_ENGINE · GEMINI_MODEL                     TTS
 (시스템 python3 에는 `paho`·`numpy` 가 없다).
 
 ```bash
-ssh mechdog@172.30.1.65                 # mDNS(mechdog-b.local)가 가끔 안 풀린다
+ssh mechdog@<파이 IP>                  # mDNS(mechdog-b.local)가 가끔 안 풀린다
 set -a; . ~/.gemini_env; set +a         # Gemini API 키 (저장소에 없다)
 cd ~/dialog
 
@@ -205,3 +207,14 @@ TTS_ENGINE=gemini TTS_GAP_S=4 ~/venv_stt/bin/python gen_tts.py
 | `work_docs/03_B_비기능요구사항_정의서.md` | 지연 예산 |
 | **`work_docs/09_작업기록.md`** | **왜 이렇게 됐는지** — 판단과 시행착오 56건. 코드를 고치기 전에 여기부터 본다 |
 | `work_docs/exports/*.drawio` | 도면 (원본은 `tools/gen_*_flowchart.py`) |
+
+### 로그 읽기
+
+```bash
+python3 tools/dialog_log_stats.py ~/dialog_logs/*.jsonl    # p50/p95 · 세션 누수 · 턴 수
+python3 tools/dialog_log_to_sql.py ~/dialog_logs/*.jsonl   # dialog_sessions / dialog_turns INSERT
+```
+
+로그 위치는 `DIALOG_LOG_DIR`(기본 `~/dialog_logs`)로 바꾼다.
+**DB 에 누가 넣을지는 아직 안 정해졌다** — 그래서 파일로 먼저 쌓는다.
+필드 이름을 컬럼명과 맞춰 뒀으므로 나중에 어느 쪽으로 정해지든 옮기기만 하면 된다.

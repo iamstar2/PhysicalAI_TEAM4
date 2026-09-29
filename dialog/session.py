@@ -26,10 +26,11 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import dlog
 import eye
 import info_places
 import llm_fallback
-from audio import play, record_until_silence
+from audio import ENDPOINT_MS, play, record_until_silence
 from bus import Bus
 from destinations import DESTINATIONS
 from hangul import find_fuzzy
@@ -69,10 +70,25 @@ CORRECTION = ["아니", "말고", "말구", "아니라", "잘못", "죄송", "�
 # 0.45~0.75 구간에 두어 **반드시 확인 질의를 거치게** 한다 (16 통과, 20 미달 → 22).
 LLM_CONFIDENCE = 0.60
 
+# 확인 질의를 건너뛰려면 음성 인식 신뢰도가 이 이상이어야 한다 (`FR-B-501` v1.13).
+SKIP_MIN_P_STT = float(os.environ.get("SKIP_MIN_P_STT", "0.60"))
+
 # `confirm()` 이 돌려주는 특수 신호. **사양은 실패가 아니다** —
 # `None`(= 확인 실패 → 재질문)과 섞이면 방문자가 안내를 사양했을 뿐인데
 # 시도 횟수를 까먹고 결국 에스컬레이션까지 간다(실측으로 확인했다).
 LOOP_BACK = "__loop__"
+
+
+def _endpoint_s() -> float:
+    """녹음기가 지금 쓰는 무음 기준(초). 실행 중 환경변수를 바꿀 수 있어 매번 읽는다."""
+    return int(os.environ.get("ENDPOINT_MS", ENDPOINT_MS)) / 1000
+
+# `leave(why)` 의 사유를 공유 정의서(`11`)의 `dialog_sessions.outcome` 값으로 옮긴다.
+# 여기 없는 사유는 `abandoned_silent`(앞에 사람이 없었다)로 본다.
+_OUTCOME = {
+    "재촉 후에도 무터치": "abandoned_no_touch",
+    "세션 상한 60초 초과": "abandoned_timeout",
+}
 
 # (v3.2 에서 폐기) 예전에는 첫 발화에서 룰이 확신하면 LLM 을 건너뛰었다.
 # 지금은 **LLM 이 먼저**라 쓰이지 않는다 — 아래 설명은 왜 그렇게 했다가 뒤집었는지의 기록이다.
@@ -96,6 +112,7 @@ CHIME = Path.home() / "chimes"
 
 
 _after_listen = False       # 방금 들은 말을 처리하고 답하려는 참인가
+_speech_end = 0.0           # 방문자가 말을 마친 시각 — `NFR-B-101` 이 재는 구간의 시작점
 _bus = None                 # 재생 중 터치를 감시하려면 버스가 필요하다
 _cut_by_touch = False       # 멘트를 터치로 끊었나 (그 터치를 대기에서 또 쓰면 안 된다)
 
@@ -132,7 +149,7 @@ def chime(name: str) -> None:
     play(f)
 
 
-def say(key: str) -> bool:
+def say(key: str, eye_state: str | None = None) -> bool:
     """캐시된 안내 음성을 재생한다 (눈은 '안내중').
 
     같은 멘트에 **변형이 여러 개면 그중 하나를 무작위로** 고른다
@@ -143,13 +160,24 @@ def say(key: str) -> bool:
     variants = sorted(CACHE.glob(f"{key}_[0-9].wav"))
     path = random.choice(variants) if variants else CACHE / f"{key}.wav"
 
+    # **`NFR-B-101` 이 재는 구간이 여기서 끝난다** — 방문자가 처음 듣는 소리는 아래 효과음이라
+    # 효과음 **앞에서** 찍는다(효과음 재생 시간까지 넣으면 응답이 늦은 것처럼 잰다).
+    global _speech_end
+    if _speech_end:
+        dlog.stage(total_ms=int((time.time() - _speech_end) * 1000))
+        _speech_end = 0.0
+
     # 방금 방문자 말을 듣고 처리한 직후라면 **"이제 대답한다" 는 신호**를 먼저 낸다.
     if _after_listen:
         _after_listen = False
         chime("chime_speak")
 
-    eye.set_state(eye.SPEAKING)
+    # 눈은 보통 '말하기(파랑)' 다. **에스컬레이션처럼 다른 색을 유지해야 하는 멘트는 받아서 쓴다** —
+    # 예전에는 무조건 파랑으로 바꿔서, 바로 앞에서 켠 빨강이 보이기도 전에 덮였다(`LOG-84`).
+    eye.set_state(eye_state or eye.SPEAKING)
+    t0 = time.time()
     ok = play(path, stop=_stop_on_touch)
+    dlog.stage(prompt_id=path.stem, tts_ms=int((time.time() - t0) * 1000))
     if not ok:
         print(f"[say] 재생 실패: {key}")
     return ok
@@ -163,19 +191,25 @@ def listen(tag: str, no_speech_s: float | None = None):
     eye.set_state(eye.LISTENING)
     if no_speech_s is not None:
         os.environ["NO_SPEECH_TIMEOUT_S"] = str(no_speech_s)
+    dlog.next_utterance()          # 새 발화 — 앞 발화를 한 줄로 닫는다 (`FR-B-802`)
     chime("chime_listen")          # 지금 말하세요
     rec = record_until_silence(wav)
+    t_rec_end = time.time()        # 효과음보다 **먼저** 찍는다
     chime("chime_stop")            # 끝났습니다
     print(f"  [녹음] {rec.dur_s:.2f}초 · 발화 {rec.speech} · 종료 {rec.reason} "
           f"· rms {rec.rms}")
     if not rec.speech:
         return None
 
-    global _after_listen
+    global _after_listen, _speech_end
     _after_listen = True           # 여기서부터 연산 구간 — 다음 say 앞에 완료음이 붙는다
+    # `NFR-B-101` 시작점은 **방문자가 말을 마친 순간**이다. 녹음은 그 뒤 무음 `ENDPOINT_MS` 를
+    # 확인하고서야 끝나므로, 녹음 종료 시각을 그대로 쓰면 그만큼 짧게 잰다(예산표에는 들어 있다).
+    _speech_end = t_rec_end - (_endpoint_s() if rec.reason == "endpoint" else 0.0)
     eye.set_state(eye.THINKING)
     t0 = time.time()
     res = transcribe(wav)
+    dlog.stage(stt_ms=int((time.time() - t0) * 1000), stt_raw=res.text)
     print(f'  [STT ] {time.time()-t0:.2f}초 · p={res.p_stt:.2f} · "{res.text}"')
     return res
 
@@ -258,6 +292,7 @@ def verdict(text: str, question: str) -> bool | None:
 class Session:
     bus: Bus
     session_id: str
+    visitor_id: str | None = None
     attempt: int = 1
     ambig: int = 0
     stt_fail: int = 0
@@ -266,6 +301,7 @@ class Session:
     served: bool = False           # 방문자가 원한 정보를 이미 준 적 있나
     sched: str | None = None       # LLM 이 어느 일정으로 풀었나 (전용 확인 멘트용)
     opened: bool = False           # 터치로 대화가 열렸나 (터치는 세션당 처음 한 번)
+    skipped: bool = False          # 확인 질의를 건너뛰었나 (장소를 직접 말함)
     started: float = field(default_factory=time.time)
 
     # ---- 보조 ------------------------------------------------------------
@@ -280,7 +316,9 @@ class Session:
         """
         p = self.bus.present(PRESENT_CM)
         if p is None:                      # 센서 두절 — 부재로 단정하지 않는다
+            dlog.stage(presence="not_checked")
             return True
+        dlog.stage(presence="present" if p else "absent")
         self.absent_streak = 0 if p else self.absent_streak + 1
         return self.absent_streak < ABSENT_STREAK
 
@@ -292,6 +330,7 @@ class Session:
         초음파를 의심하게 된다(실제로 첫 실행에서 그럴 뻔했다 — 57cm 에 서 계셨다).
         """
         print(f"  → 이탈 판정 ({why})")
+        dlog.stage(decision="leave")
         if self.served:
             # 원하는 걸 듣고 간 것은 **실패가 아니다.** 경고를 보내면 D 대시보드에
             # 정상 응대가 이탈로 쌓인다.
@@ -299,20 +338,26 @@ class Session:
         else:
             self.bus.publish_alert(self.session_id, "info", "dialog_timeout")
         eye.set_state(eye.IDLE)
+        # 공유 정의서(`11`)의 outcome enum 으로 옮긴다. 원인이 다르면 값도 달라야
+        # 한다 — 셋을 뭉뚱그리면 나중에 "왜 갔는지" 를 로그로 되물을 수 없다.
+        dlog.close_session(_OUTCOME.get(why, "abandoned_silent"),
+                           retry_count=self.attempt - 1)
         return "left"
 
     def escalate(self, reason: str) -> str:
         """19 실패 안내 + D 에스컬레이션."""
         print(f"  → 에스컬레이션 ({reason})")
-        eye.set_state(eye.ERROR)
-        say("escalate")
+        dlog.stage(decision="reask")
+        say("escalate", eye_state=eye.ERROR)     # 빨강인 채로 말한다
         self.bus.publish_alert(self.session_id, "warn", reason)
         eye.set_state(eye.IDLE)
+        dlog.close_session("escalated", retry_count=self.attempt - 1,
+                           escalation_reason=reason)
         return "escalated"
 
     # ---- 확정 -------------------------------------------------------------
     def confirm(self, dest: str, confidence: float, purpose: str,
-                depth: int = 0) -> str | None:
+                depth: int = 0, skip: bool = False) -> str | None:
         """21/22 확인 질의 → 23 응답 판정. 긍정이면 확정까지 간다.
 
         확인 질의는 **오확정을 막는 마지막 관문**이다. 룰이 틀리게 "성공"한 적이
@@ -322,6 +367,13 @@ class Session:
         넘기는 역할이고, 방문자와 함께 움직이는 건 C(에스코트)다. 배웅은 여정이 끝나는
         자리에서 나와야 자연스러우므로 C 의 몫이다.
         """
+        self.skipped = skip
+        dlog.stage(decision="strong_confirm" if skip else "confirm",
+                   confidence=round(float(confidence), 2))
+        if skip:
+            print(f"  [확인] 생략 — 키워드·LLM 모두 {dest} (장소를 직접 말함)")
+            return self._offer_escort(dest, confidence, purpose)
+
         # 일정으로 풀린 경우에는 전용 멘트가 있다. 없으면 일반 확인 멘트.
         say(f"sched_{self.sched}" if self.sched else f"confirm_{dest}")
         ans = listen(f"ans_{self.attempt}", no_speech_s=7.0)   # CONFIRMING 7초
@@ -352,19 +404,13 @@ class Session:
         수락하지 않으면 `dialog.result` 를 **발행하지 않는다.** C 가 움직일 이유가 없고,
         방문자는 이미 위치를 들었다. 거절 자체는 이상 상황이 아니라 `alert.event` 도 안 보낸다.
         """
-        # ㉖-1 — C 가 받을 수 있을 때만 제안한다 (`FR-B-708`).
-        # 안내 중·복귀 중인데 "직접 안내해 드릴까요" 를 물으면 **못 지킬 약속**이 된다.
-        # B 는 dialog.result 를 던지고 응답을 확인하지 않으므로 실패를 영영 모른다.
-        if not self.bus.escort_ready():
-            print(f"  [에스코트] 건너뜀 — 안내견 상태 {self.bus.escort_state or '모름'}")
-            say(f"busy_{dest}")
-            self.served = True
-            self.opened = False
-            self.started = time.time()
-            say("closing")
-            return LOOP_BACK
-
-        say(f"where_{dest}")
+        # 엘리베이터는 "2층·위층·엘리베이터·사무실" 이 **한 목적지로 묶여** 있다.
+        # "2층 가려고요" 에 "사무실은 2층에 있어요" 라고 하면 엉뚱하므로,
+        # **사무실을 물은 사람에게만** 사무실 문장을 준다.
+        where = f"where_{dest}"
+        if dest == "elevator_hall" and "사무실" in (purpose or ""):
+            where = "where_elevator_hall_office"
+        say(where)
         ans = listen(f"escort_{self.attempt}", no_speech_s=7.0)
         # **긍정일 때만 수락이다.** 나머지는 전부 사양으로 본다 —
         # 사양을 따로 분류할 이유가 없다(안 원하면 그냥 가고, 초음파가 잡는다).
@@ -385,6 +431,27 @@ class Session:
             say("closing")
             return LOOP_BACK
 
+        # ㉖-1 — **수락한 뒤에** C 가 받을 수 있는지 본다 (`FR-B-708`).
+        #
+        # 예전에는 제안 **전에** 확인해서, C 가 바쁘면 묻지도 않고
+        # "모든 안내견이 안내 중이에요" 부터 말했다. 방문자는 안내해 달라고 한 적도
+        # 없는데 사정부터 듣게 돼 뜬금없었다(별이님 지적). **묻는 것 자체는 약속이 아니다** —
+        # 약속은 `dialog.result` 를 보내는 순간이고, 그건 여전히 C 가 받을 수 있을 때만 한다.
+        # 확인 시점을 뒤로 미루면 **가장 최신 상태**로 판단한다는 이점도 있다.
+        if not self.bus.escort_ready():
+            print(f"  [에스코트] 수락했지만 안내견 불가 — 상태 {self.bus.escort_state or '모름'}")
+            dlog.stage(decision="prompt")
+            # **마무리 인사를 붙이지 않는다.** `closing` 은 변형 중 하나가 무작위로 나와서
+            # "좋은 하루 보내세요" 가 걸리면, 방금 거절당한 사람에게 등을 떠미는 말이 된다.
+            # 다시 물어볼 수 있다는 안내까지 `busy` 한 문장에 담아 **경로를 고정**한다.
+            say("busy")
+            self.served = True
+            self.opened = False
+            self.started = time.time()
+            return LOOP_BACK
+
+        dlog.stage(decision="strong_confirm" if (confidence >= 0.8 or self.skipped) else "confirm",
+                   confidence=round(float(confidence), 2))
         return self._handoff(dest, confidence, purpose)
 
     def _handoff(self, dest: str, confidence: float, purpose: str) -> str:
@@ -395,6 +462,8 @@ class Session:
               f"{'ok' if ok else '실패(큐 보관)'}")
         say(f"escort_{dest}")
         eye.set_state(eye.IDLE)
+        dlog.close_session("confirmed", destination=dest, purpose=purpose,
+                           confidence=confidence, retry_count=self.attempt - 1)
         return "confirmed"
 
     def _answer_as_utterance(self, ans, depth: int) -> str | None:
@@ -437,6 +506,18 @@ class Session:
 
     # ---- 한 턴 -------------------------------------------------------------
     def turn(self) -> str | None:
+        """한 턴. `_turn_once` 를 돌리고 **끝에서 로그 한 줄을 흘린다** (`FR-B-802`).
+
+        기록을 본문 안에 흩어 놓지 않고 여기 모은 이유는, 본문에 빠져나가는 길이
+        여럿이라(재질문·이탈·확정·선택형) 어느 한 곳을 빠뜨리기 쉬워서다.
+        `dlog.stage()` 로 모아 두고 **나가는 길이 하나뿐인 여기서** 쓴다.
+        """
+        out = self._turn_once()
+        if out is None:          # 세션이 계속된다 — 여기서 한 턴이 닫힌다
+            dlog.turn()          # 끝나는 턴은 close_session 이 흘려보낸다
+        return out
+
+    def _turn_once(self) -> str | None:
         """터치 대기 → 청취 → 매핑 → 확인. 세션이 끝나면 결과 문자열을 돌려준다."""
         # 6-2 터치 대기
         #
@@ -459,7 +540,10 @@ class Session:
             return self._after_touch()
 
         print(f"  [대기] 터치를 기다린다 (최대 {TOUCH_WAIT_S:.0f}초) — 눈 노란색")
-        if not self.bus.wait_touch(TOUCH_WAIT_S):
+        _t_touch = time.time()
+        _got = self.bus.wait_touch(TOUCH_WAIT_S)
+        dlog.stage(touch_wait_ms=int((time.time() - _t_touch) * 1000))
+        if not _got:
             # 6-3 무터치 → 8-2 재실 확인
             if not self.present():
                 return self.leave()
@@ -474,6 +558,8 @@ class Session:
         """터치를 받은 다음 — 7 청취부터."""
         res = listen(f"utt_{self.attempt}")
         self.started = time.time()     # 방문자가 말했다 — 상한 시계를 되돌린다
+        if res is not None:
+            dlog.stage(stt_raw=res.text)
         if res is None:
             if not self.present():
                 return self.leave()
@@ -502,6 +588,8 @@ class Session:
         m = match(res.text, res.p_stt)
         print(f"  [룰  ] {m.action} · dest={m.dest} · conf={m.confidence:.2f}"
               + (f" · {m.note}" if m.note else ""))
+        dlog.stage(stt_corrected=m.text,
+                   candidates=[c.dest for c in m.candidates])
 
         # 13-2 **LLM 우선** (v3.2)
         #
@@ -513,6 +601,7 @@ class Session:
         # 룰을 버리는 게 아니다 — **LLM 이 판단하지 못하거나 네트워크가 끊겼을 때 받는다.**
         # 그래야 인터넷 없이도 "입고요" 같은 직접 발화는 계속 동작한다.
         dest, conf = self._llm(res.text), LLM_CONFIDENCE
+        llm_dest = dest                   # 룰로 내려가기 **전의** LLM 판단 (확인 생략 판정용)
 
         if dest is None:
             # LLM 이 답을 못 냈다 → 룰로 내려간다
@@ -521,6 +610,7 @@ class Session:
                 if fixed:
                     return self._confirmed(self.confirm(fixed, LLM_CONFIDENCE, res.text))
                 self.ambig += 1
+                dlog.stage(decision="disambiguate")
                 if self.ambig >= MAX_AMBIG:       # 15-2 가드 (BR-B-13)
                     print("  선택형 3회 도달 → 시도 횟수로 합산")
                     return self._reask()
@@ -534,6 +624,7 @@ class Session:
                 if self.said_info:
                     # 물어본 곳을 방금 알려줬다. 목적지가 없다고 또 되묻는 건 눈치가 없다.
                     print("  → 안내만 하고 터치 대기로 복귀")
+                    dlog.stage(decision="prompt")
                     self.served = True
                     # 한 판이 끝났다 — 다음 손님은 **다시 터치부터**다.
                     # 이걸 안 닫으면 "터치해 주세요" 라고 말해 놓고 곧바로 녹음을 연다.
@@ -543,7 +634,20 @@ class Session:
                     return None
                 return self._reask()
 
-        return self._confirmed(self.confirm(dest, conf, res.text))
+        # **키워드와 LLM 이 같은 곳을 가리키면 되묻지 않는다.** 방문자가 장소를 직접 말한 것이다.
+        # "사무실이 어딘가요?" 에 "2층 가시는 거 맞으실까요?" 로 되묻는 건 사람이라면 안 할 대답이다.
+        # 확인 질의는 **추측이 틀릴 수 있어서** 있는 것이고, 두 판단이 따로 같은 답을 냈으면 추측이 아니다.
+        # 일정표로 풀린 경우(`sched`)는 계속 묻는다 — 그건 추론이고, 일정 멘트 자체가 쓸모 있다.
+        # **인계 전 확인은 사라지지 않는다** — "직접 안내해 드릴까요?" 에 "네" 해야만 C 에게 넘긴다.
+        # **말을 고친 문장은 생략하지 않는다.** "회의실이 어딥니까, 아 죄송합니다 화장실이…" 처럼
+        # 취소된 쪽을 키워드와 LLM 이 **같이** 잡을 수 있다 — 두 판단이 일치해도 추측이 아닌 게 아니다.
+        # 실사람 녹음 벤치에서 j03 이 확인 없이 회의실 위치를 말해 버렸다 (`LOG-80`).
+        # **음성 인식이 자신 없으면 생략하지 않는다.** 알아듣기 힘든 소리를 whisper 가 "도크, 회의실" 로
+        # 지어내자 키워드·LLM 이 둘 다 회의실로 일치해 확인 없이 안내한 적이 있다(`LOG-81` h04, p=0.56).
+        # 정상 발화는 대부분 0.64 이상이다 — 경계에 걸리면 확인을 한 번 더 받을 뿐이라 안전한 쪽이다.
+        agreed = (llm_dest is not None and llm_dest == m.dest and not self.sched
+                  and not self._correcting(res.text) and res.p_stt >= SKIP_MIN_P_STT)
+        return self._confirmed(self.confirm(dest, conf, res.text, skip=agreed))
 
     @staticmethod
     def _choose_key(m) -> str:
@@ -621,6 +725,7 @@ class Session:
     def _reask(self, why: str = "인식 실패") -> str | None:
         """17 시도 검사 → 17-2 재실 확인 → 18 재질문."""
         print(f"  → 재질문 ({why}, 시도 {self.attempt} → {self.attempt + 1})")
+        dlog.stage(decision="reask")
         self.attempt += 1
         if self.attempt > MAX_ATTEMPTS:
             return self.escalate("dialog_failed")
@@ -637,6 +742,7 @@ class Session:
         self.bus.touch_edge.clear()            # 세션 전에 쌓인 터치는 버린다
         self.opened = False                    # 이 세션에서 터치를 한 번이라도 받았나
         print(f"\n=== 세션 {self.session_id} ===")
+        dlog.open_session(self.session_id, self.visitor_id)
         say("greet")                           # 6 M-01
         while True:
             if self.expired():
@@ -665,6 +771,10 @@ def main() -> int:
         sid = f"demo-{int(time.time())}"
         try:
             print(Session(bus, sid).run())
+        except KeyboardInterrupt:
+            dlog.close_interrupted()      # 누수로 잡히지 않게 (`NFR-B-403`)
+            eye.set_state(eye.IDLE)       # 끄면 노랑으로 — 안 그러면 마지막 색(파랑)이 그대로 남는다
+            print("\n종료")
         finally:
             bus.close()
         return 0
@@ -684,8 +794,10 @@ def main() -> int:
                 print(f"  3 대화 미개시 (face={p.get('face_result')} "
                       f"ppe={p.get('ppe_result')})")
                 continue
-            print(Session(bus, msg.get("session_id", "unknown")).run())
+            print(Session(bus, msg.get("session_id", "unknown"),
+                          p.get("visitor_id")).run())
     except KeyboardInterrupt:
+        dlog.close_interrupted()
         eye.set_state(eye.IDLE)
         print("\n종료")
     except Exception as e:

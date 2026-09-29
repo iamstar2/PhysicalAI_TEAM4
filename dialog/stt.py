@@ -30,6 +30,12 @@ WHISPER_MODEL = Path(os.environ.get(
 
 THREADS = int(os.environ.get("WHISPER_THREADS", "4"))
 
+# **인식 한 번의 상한.** 평소 2초 안팎인데, 알아듣기 힘든 소리가 들어오면 whisper 가 온도를 올려 가며
+# 다시 디코딩해 17.6초까지 헛돈 적이 있다(`LOG-81` h04 — 그러고도 "도크, 회의실, 도크" 를 지어냈다).
+# 재시도는 `-nf` 로 끄고, 그래도 넘치면 **실패로 돌려준다** — 방문자를 20초 세워 두느니 다시 묻는 게 낫다.
+STT_TIMEOUT_S = float(os.environ.get("STT_TIMEOUT_S", "8.0"))
+NO_FALLBACK = os.environ.get("STT_NO_FALLBACK", "1") == "1"
+
 # 특수 토큰은 확률 평균에서 뺀다. [_BEG_], [_TT_100] 같은 것들로,
 # 실제 발화 내용이 아니라 디코더 제어용이라 신뢰도에 섞으면 값이 왜곡된다.
 def _is_special(tok_text: str) -> bool:
@@ -63,9 +69,17 @@ def transcribe(wav_path: str | Path, prompt: str = INITIAL_PROMPT) -> SttResult:
             "--output-json-full",
             "-of", str(out_prefix),
             "--no-prints",
-        ]
-        subprocess.run(cmd, check=True, capture_output=True)
-        data = json.loads((out_prefix.with_suffix(".json")).read_text(encoding="utf-8"))
+        ] + (["-nf"] if NO_FALLBACK else [])
+        # **실패해도 예외를 올리지 않는다** (`FR-B-903`). 예전에는 whisper 가 죽으면
+        # `CalledProcessError` 가 대화 루프까지 올라가 **B 프로세스가 통째로 죽었다**(`LOG-80`).
+        # 빈 결과를 돌려주면 호출 측이 STT 실패로 세서 재질문 → 3회면 에스컬레이션으로 간다.
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, timeout=STT_TIMEOUT_S)
+            data = json.loads((out_prefix.with_suffix(".json")).read_text(encoding="utf-8"))
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+                OSError, json.JSONDecodeError) as e:
+            print(f"[stt] 인식 실패 — {type(e).__name__} (빈 결과로 처리)")
+            return SttResult(text="", p_stt=0.0, n_tokens=0, raw={})
 
     texts, probs = [], []
     for seg in data.get("transcription", []):
