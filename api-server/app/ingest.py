@@ -26,8 +26,12 @@ from . import config
 
 # --- 값 매핑 (TODO(협의)) ----------------------------------------------------
 
-# alert_logs.level 은 'WARNING' | 'ALERT' 2값, 메시지 level 은 info | warn | critical 3값
-ALERT_LEVEL = {"info": "WARNING", "warn": "WARNING", "critical": "ALERT"}
+# alert_logs.level 은 스키마 주석상 'WARNING' | 'ALERT' 2값인데, 메시지 level 은 info | warn | critical 3값.
+# info 는 경고가 아니라 참고 알림이다 (B 가 응대 없이 떠난 방문자를 알릴 때만 씀 — dialog_timeout).
+# WARNING 에 섞으면 관리자가 해제할 일 없는 행이 '미해제 경고' 로 쌓이므로 INFO 로 따로 두고
+# 처음부터 해제된 것으로 넣는다. 칸이 TEXT 라 스키마 변경은 없고, 허용값 주석에 INFO 추가만 필요 (최현수).
+ALERT_LEVEL = {"info": "INFO", "warn": "WARNING", "critical": "ALERT"}
+AUTO_RESOLVED = {"info"}
 
 # access_decisions.helmet 은 '착용' | '미착용' | '판정불가'
 HELMET = {"pass": "착용", "fail": "미착용", "undetermined": "판정불가"}
@@ -229,6 +233,15 @@ def alert_event(c, m, p) -> str:
     # TODO(협의): 한 가지로 통일되면 나머지 분기는 지워도 된다
     sid = m["session_id"] if ensure_session(c, m["session_id"]) else None
     resolved = bool(p.get("resolved", False))
+    if p["level"] in AUTO_RESOLVED and not resolved:        # 참고 알림 — 해제할 대상이 아니다
+        c.execute("""INSERT INTO alert_logs
+                       (msg_id, session_id, robot_id, occurred_at, level, reason,
+                        resolved, resolved_at, snapshot_path)
+                     VALUES (%s, %s, %s, %s, %s, %s, true, %s, %s)
+                     ON CONFLICT (msg_id) DO NOTHING""",
+                  (m["msg_id"], sid, m["src"], m["ts"], ALERT_LEVEL[p["level"]], p["reason"],
+                   m["ts"], p.get("snapshot_path")))
+        return "alert_logs(참고 알림)"
     if resolved:
         c.execute("""UPDATE alert_logs SET resolved = true, resolved_at = COALESCE(resolved_at, %s)
                      WHERE msg_id = %s RETURNING alert_id""", (m["ts"], m["msg_id"]))
@@ -242,6 +255,11 @@ def alert_event(c, m, p) -> str:
                      RETURNING alert_id""", (m["ts"], sid, p["reason"]))
         if c.fetchone():
             return "alert_logs(해제)"
+        # 이미 해제돼 있는 경고의 해제 — info(처음부터 해제로 저장)를 대시보드가 해제 버튼으로 닫은 경우 등
+        c.execute("""SELECT 1 FROM alert_logs WHERE session_id IS NOT DISTINCT FROM %s AND reason = %s
+                     LIMIT 1""", (sid, p["reason"]))
+        if c.fetchone():
+            return "alert_logs(이미 해제)"
         # 맞는 경고가 없으면(API 가 발생 메시지를 못 받은 경우) 해제된 경고로 한 줄 남긴다
     c.execute("""INSERT INTO alert_logs
                    (msg_id, session_id, robot_id, occurred_at, level, reason,

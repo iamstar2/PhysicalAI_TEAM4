@@ -412,3 +412,22 @@ def test_revisit_is_new_row(client, examples):
     again["session_id"] = "sess-20260929150000-mechdog_a-00000002"
     client.post("/events", json=again, headers=H(COL))
     assert len(rows("SELECT * FROM access_decisions")) == 2
+
+
+def test_info_alert_is_not_an_open_warning(client, examples):
+    # info 는 참고 알림 (B: 응대 없이 떠난 방문자) — '미해제 경고' 로 쌓이면 안 된다
+    m = _msg(examples, "alert.event", level="info", reason="dialog_timeout", snapshot_path=None)
+    assert client.post("/events", json=m, headers=H(COL)).json()["stored"] == "alert_logs(참고 알림)"
+    d = rows("SELECT level, resolved, resolved_at FROM alert_logs")[0]
+    assert d["level"] == "INFO" and d["resolved"] and d["resolved_at"] is not None
+    assert client.get("/alerts", params={"resolved": False}, headers=H(DASH)).json() == []
+
+
+def test_dashboard_clearing_info_does_not_add_row(client, examples):
+    # D 는 info 도 활성 카드로 띄우고, 관리자가 누르면 새 msg_id 로 resolved=true 를 보낸다
+    m = _msg(examples, "alert.event", level="info", reason="dialog_timeout", snapshot_path=None)
+    client.post("/events", json=m, headers=H(COL))
+    clear = _msg(examples, "alert.event", level="info", reason="dialog_timeout",
+                 snapshot_path=None, resolved=True)
+    assert client.post("/events", json=clear, headers=H(COL)).json()["stored"] == "alert_logs(이미 해제)"
+    assert len(rows("SELECT * FROM alert_logs")) == 1

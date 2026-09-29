@@ -148,15 +148,13 @@ API_URL=http://<서버>:8080 API_TOKEN=<mechdog_b 토큰> python3 tools/dialog_l
 
 | 무엇 | 누구와 | 지금은 |
 |---|---|---|
-| `alert_logs.level` 2값 ↔ 메시지 3값 | 백경률 · 최현수 | info · warn → WARNING, critical → ALERT |
+| `alert_logs.level` 허용값에 `INFO` 추가 | 최현수 | info → **INFO**(참고 알림, 처음부터 해제됨) · warn → WARNING · critical → ALERT. 칸이 TEXT 라 스키마 변경 없이 동작하고, 주석의 허용값만 고치면 된다 |
+| 대시보드가 info 를 활성 경고 카드로 띄우는 것 | 백경률 | D 는 info 도 warn · critical 과 똑같이 **활성 카드 + 해제 버튼**으로 띄워, 관리자가 누를 때까지 남는다. info 는 참고 알림이라 이력에만 보이게 하는 편이 맞다. API 는 이미 해제로 저장하고, 대시보드가 보내는 해제는 무시한다 |
 | 한 세션에 판정이 한 번뿐인지 | 여도훈 | **1회 1행으로 합침 (09-29)** — A 판정 흐름도(사진 1장 → 얼굴 · PPE → `policy.decide()`)와 A 의 표 설계에 맞춘 것. 판정 실패 시 새 세션으로 다시 시작한다는 전제라 **같은 세션 = 판정 1회** 로 합친다. 재방문도 새 세션이라 새 행. 한 세션에서 여러 번 판정하게 되면 합치기 기준을 바꿔야 한다 |
-| ~~person_id · latency_ms~~ | — | **해결 (09-29)** — 메시지 스키마에 선택 필드로 추가. A 가 채워 보내면 저장된다 (등록 안 된 person_id 는 비움). ⚠ D 가 새 스키마를 먼저 받아야 한다 (`schema/README.md` 맨 끝) |
-| ~~등록 사진을 A 가 DB 에서 직접 읽을지~~ | — | **해결 (09-29)** — **API 로 받는다.** 사진이 암호화돼 있어 DB 에서 직접 읽으면 쓸 수 없고, 읽기 전용 DB 계정도 필요 없다 |
 | `escort_logs` session_id 없음 · 중단 표시 | 최현수 | robot_id 숫자는 HW 설계도 이름(mechdog-01~04)과 같아 **그대로 둬도 된다**. 중단은 motion_played='aborted' |
 | `access_decisions` · `event_logs` 에 session_id · msg_id | 최현수 | 없음 — [`sql/proposed_changes.sql`](sql/proposed_changes.sql) |
 | 감사 로그를 DB 로 | 최현수 | 파일 |
 | 경고 해제를 무엇으로 맞출지 | 백경률 · 최현수 | 스키마 주석은 같은 msg_id, 대시보드 코드는 새 msg_id + (session_id, reason) → 둘 다 받음 |
-| ~~sessions 를 A 가 직접 만들지~~ | — | **해결** — 팀 스키마 0번(A안) "A 가 방문자 감지 시 1행" 을 gate.session → API 가 대신 넣는 것으로 지킨다 |
 | 토큰 · 권한 표 | 전원 | 위 표 |
 | C 쪽 "MQTT-DB 브릿지" 가 지금 동작하는지 | 최현수 | **확인 필요** — `DogC_Flow` 문서 · host2 compose 주석에 escort/status 를 브릿지로 `event_logs` 에 저장한다고 적혀 있다(코드는 미확인). 동작 중이면 끄지 않을 경우 API 경로와 중복 저장된다 |
 
