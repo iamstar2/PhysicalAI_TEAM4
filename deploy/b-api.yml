@@ -1,0 +1,25 @@
+# B 노트북 (김별이) — API 서버
+#   docker compose -f deploy/b-api.yml up -d --build
+# DB 는 C 노트북에 있다 — 주소 · 계정 · 토큰 · 암호화 키는 api-server/.env 한 곳에 둔다.
+# B 의 대화 서비스는 도커가 아니라 라즈베리파이5 에서 직접 돈다 (dialog/README.md).
+
+services:
+  api-server:
+    build:
+      context: ..
+      dockerfile: api-server/Dockerfile
+    container_name: api_server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - ../api-server/.env            # 없으면 여기서 멈춘다 (토큰 · 키 없이 뜨면 안 되므로)
+    environment:
+      SNAPSHOT_ROOT: /data/snap
+    volumes:
+      - snap_data:/data/snap          # 경고 사진 (암호화, 7일 보관)
+      - api_logs:/data/logs           # 감사 로그 · 거부 메시지
+
+volumes:
+  snap_data:
+  api_logs:

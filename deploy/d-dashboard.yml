@@ -1,0 +1,21 @@
+# D 노트북 (백경률) — 보안 대시보드
+#   docker compose -f deploy/d-dashboard.yml up -d --build
+# security-dashboard/ 코드는 feature/mechdog-buzzer 브랜치에 있다 (main 에 합친 뒤 사용).
+# 도커 없이 `python security-dashboard/app/main.py` 로 띄워도 된다 — 환경변수만 아래와 같게.
+
+services:
+  security-dashboard:
+    build:
+      context: ..
+      dockerfile: security-dashboard/Dockerfile
+    container_name: security_dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      MQTT_HOST: ${BROKER_IP:?deploy/.env 에 BROKER_IP 를 넣으세요}
+      MQTT_PORT: "1883"
+      MECHDOG_D_DRIVER: udp
+      MECHDOG_D_UDP_HOST: ${D_ROBOT_IP:?deploy/.env 에 D_ROBOT_IP 를 넣으세요}
+      # TODO(협의): 경고 사진을 API 서버에서 받게 바뀌면 API 주소 · dashboard 토큰 추가
+      # API_URL: http://${API_IP}:8080

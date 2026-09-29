@@ -231,3 +231,22 @@ D 제어 서비스가 시리얼로 바꿀 때 쓰는 내부 규약이다. 스키
 **`retain: false`** — 상태가 아니라 명령이다. `true` 로 두면 로봇이 재접속할 때마다
 브로커가 마지막 명령을 다시 던져서, **이미 해제된 경고로 부저가 다시 울린다.**
 `escort.status`·`system.health` 가 `retain: true` 인 것과 반대다.
+
+---
+
+## `vision.face` · `vision.ppe` — `person_id` · `latency_ms` 추가 (2026-09-29)
+
+A 가 요구한 출입 판정 로그(`access_decisions`) 칸 중 **메시지로 올 길이 없던 두 개**를 선택 필드로 넣었다.
+
+| 필드 | 메시지 | 값 | DB |
+|---|---|---|---|
+| `person_id` | `vision.face` | 일치한 등록 인원. 미인가 · 판정불가면 `null`. **실명은 싣지 않는다** | `access_decisions.person_id` |
+| `latency_ms` | `vision.face` · `vision.ppe` | 판정 소요 시간(ms) | `access_decisions.latency_ms` |
+
+- 없으면 `person_id` 가 늘 비어서 팀 스키마 6번의 **미등록 방문자 집계**(`person_id IS NULL AND decision = 'allow'`)가
+  등록된 사람까지 미등록으로 센다.
+- **선택 필드라 보내지 않아도 검증은 통과한다** (10절 "선택 필드 추가").
+- ⚠ **받는 쪽이 옛 스키마 사본으로 검증하면 새 필드가 든 메시지를 거부한다** (6절 `additionalProperties: false`).
+  D 대시보드가 `vision.*` 을 검증하므로 **A 가 이 필드를 보내기 전에 D 가 이 스키마를 받아야 한다.**
+  API 서버는 이 파일을 직접 읽어서 따로 할 일이 없다.
+

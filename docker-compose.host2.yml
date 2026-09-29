@@ -1,5 +1,8 @@
 # 호스트 2 — 메인서버 (Docker) (Hw설계도.png 기준)
 #
+# ※ 0929 부터 실제 배치는 노트북 4대(A 브로커·수집 / B API / C DB / D 대시보드) — deploy/README.md 참고.
+#   이 파일은 처음 설계(서버 2대) 기록으로 남겨 둔다.
+#
 # API 서버가 DB 접근 유일 관문이고, 스냅샷·오디오·상태를 REST로 받아 node_id/kind로
 # 시나리오 A~D에 라우팅한다(판정 로직 없음). 시나리오 A~D 자체는 기존 vision/dialog/
 # escort/security 서비스이며, MQTT로는 호스트1의 브로커에 직접 붙어 실시간 이벤트를
@@ -18,22 +21,23 @@
 services:
   api-server:
     build:
-      context: ./api-server   # 여도훈 — REST 게이트웨이, DB 접근 관문, 시나리오 라우팅 (판정 로직 없음)
+      context: .                           # schema/ 를 함께 넣으려고 저장소 루트 (api-server/Dockerfile 참고)
+      dockerfile: api-server/Dockerfile    # 김별이 — DB 쓰기·조회 창구, 얼굴 등록, 경고 사진 (0929 회의)
     container_name: api_server
     ports:
-      - "8080:8080"   # POST /snapshots, /audio, /status | GET 조회·통계
+      - "8080:8080"   # POST /events, /persons, /snapshots, /dialog/import | GET 조회·통계 | /docs
     depends_on:
       - postgres
+    env_file:
+      - path: ./api-server/.env            # 토큰·암호화 키 (.env.example 참고, 커밋 금지)
+        required: false
     environment:
-      DATABASE_URL: postgresql://mechdog:mechdog@postgres:5432/mechdog
-      # 라우팅 대상 (시나리오 A~D 서비스의 내부 주소)
-      ROUTE_A_URL: http://vision-service:8000
-      ROUTE_B_URL: http://dialog-service:8000
-      ROUTE_C_URL: http://escort-service:8000
-      ROUTE_D_URL: http://security-dashboard:8000
+      # 최현수 DB 가 다른 노트북에 있으면 .env 의 DATABASE_URL 로 덮어쓴다
+      DATABASE_URL: ${DATABASE_URL:-postgresql://mechdog:mechdog@postgres:5432/mechdog}
+      SNAPSHOT_ROOT: /data/snap
     volumes:
       - snap_data:/data/snap
-      - audio_data:/data/audio
+      - api_logs:/data/logs
 
   vision-service:
     build:
@@ -117,3 +121,4 @@ volumes:
   snap_data:
   audio_data:
   postgres_data:
+  api_logs:

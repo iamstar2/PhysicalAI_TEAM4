@@ -10,6 +10,7 @@
     "items": { "helmet": "pass", "vest": "pass" },
     "overall": "pass",
     "confidence": 0.9,
+    "latency_ms": 95,
     "snapshot_path": "/data/snap/sess-20260902142540-mechdog_a-8be84138/ppe.jpg"
   }
 }

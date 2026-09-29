@@ -1,0 +1,36 @@
+# A 노트북 (여도훈) — MQTT 브로커 + 수집서버
+#   docker compose -f deploy/a-broker.yml up -d                      # 브로커만
+#   docker compose -f deploy/a-broker.yml --profile collector up -d  # 수집서버 코드가 생긴 뒤
+# 로봇 4대 · B 파이 · D 대시보드가 전부 여기(BROKER_IP:1883)에 붙는다 — 시연 중에 꺼지면 전원이 끊긴다.
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # MQTT
+      - "9001:9001"   # WebSocket
+    volumes:
+      - ../mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+
+  collector:
+    profiles: ["collector"]           # ../collector 코드가 아직 없어서 기본으로는 안 띄운다
+    build:
+      context: ../collector
+    container_name: collector
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    environment:
+      MQTT_HOST: mosquitto            # 같은 노트북의 브로커
+      MQTT_PORT: "1883"
+      API_SERVER_URL: http://${API_IP:?deploy/.env 에 API_IP 를 넣으세요}:8080
+      API_TOKEN: ${COLLECTOR_TOKEN:?deploy/.env 에 COLLECTOR_TOKEN 을 넣으세요}
+    volumes:
+      - collector_data:/data/ingest   # API 서버가 꺼져 있을 때 쌓아 둘 곳
+
+volumes:
+  mosquitto_data:
+  collector_data:
