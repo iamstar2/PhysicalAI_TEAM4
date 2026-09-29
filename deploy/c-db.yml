@@ -1,0 +1,25 @@
+# C 노트북 (최현수) — PostgreSQL
+#   docker compose -f deploy/c-db.yml up -d
+# 팀 스키마는 볼륨이 비어 있을 때 **처음 한 번만** 적용된다. 스키마를 바꾸면 ALTER 로 직접 적용하거나
+# 데이터를 버려도 되면 `docker compose -f deploy/c-db.yml down -v` 후 다시 띄운다.
+# DB 에 붙는 건 B 의 API 서버뿐이다 (0929 결정) — 다른 노트북에 계정을 나눠 주지 않는다.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-mechdog}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?deploy/.env 에 DB_PASSWORD 를 넣으세요}
+      POSTGRES_DB: ${DB_NAME:-mechdog}
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ${TEAM_SCHEMA_SQL:?deploy/.env 에 TEAM_SCHEMA_SQL 을 넣으세요}:/docker-entrypoint-initdb.d/01_team_schema.sql:ro
+
+volumes:
+  postgres_data:

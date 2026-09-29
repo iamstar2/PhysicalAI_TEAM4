@@ -21,3 +21,7 @@ firmware/**/secrets.h
 
 # 개인 의사결정 기록 — 팀 저장소에 올리지 않음
 DECISIONS.md
+
+# api-server 실행 기록 (감사 로그 · 거부 메시지 — 요청 경로가 남음)
+api-server/logs/
+.pytest_cache/
