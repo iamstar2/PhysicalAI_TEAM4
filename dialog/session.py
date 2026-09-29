@@ -331,12 +331,9 @@ class Session:
         """
         print(f"  → 이탈 판정 ({why})")
         dlog.stage(decision="leave")
-        if self.served:
-            # 원하는 걸 듣고 간 것은 **실패가 아니다.** 경고를 보내면 D 대시보드에
-            # 정상 응대가 이탈로 쌓인다.
-            print("     (이미 안내를 마쳤으므로 alert 발행 안 함)")
-        else:
-            self.bus.publish_alert(self.session_id, "info", "dialog_timeout")
+        # **이탈은 알리지 않는다** (09-29 김별이). 안내를 받고 갔든 못 받고 갔든,
+        # 스스로 떠난 사람은 길을 알아서 간 것이다 — 관리자가 할 조치가 없는데
+        # 대시보드에 카드만 쌓인다. 직원이 필요한 경우(3회 실패)는 escalate() 가 따로 알린다.
         eye.set_state(eye.IDLE)
         # 공유 정의서(`11`)의 outcome enum 으로 옮긴다. 원인이 다르면 값도 달라야
         # 한다 — 셋을 뭉뚱그리면 나중에 "왜 갔는지" 를 로그로 되물을 수 없다.
