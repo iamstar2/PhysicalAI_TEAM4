@@ -92,6 +92,18 @@
           "anyOf": [{ "$ref": "#/$defs/Confidence" }, { "type": "null" }],
           "default": null
         },
+        "person_id": {
+          "type": ["string", "null"],
+          "maxLength": 20,
+          "default": null,
+          "description": "일치한 등록 인원(persons.person_id). 미인가 · 판정불가면 null. 실명은 싣지 않는다 (2026-09-29 추가, 선택)"
+        },
+        "latency_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "default": null,
+          "description": "판정 소요 시간(ms) — access_decisions.latency_ms (2026-09-29 추가, 선택)"
+        },
         "snapshot_path": { "type": "string" }
       }
     },
@@ -112,6 +124,12 @@
         },
         "overall": { "$ref": "#/$defs/PpeResult" },
         "confidence": { "$ref": "#/$defs/Confidence" },
+        "latency_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "default": null,
+          "description": "판정 소요 시간(ms) — access_decisions.latency_ms (2026-09-29 추가, 선택)"
+        },
         "snapshot_path": { "type": "string" }
       }
     },

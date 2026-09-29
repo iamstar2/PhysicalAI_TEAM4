@@ -10,6 +10,8 @@
     "result": "authorized",
     "confidence": 0.93,
     "similarity": 0.81,
+    "person_id": "EMP-0001",
+    "latency_ms": 180,
     "snapshot_path": "/data/snap/sess-20260902142540-mechdog_a-8be84138/face.jpg"
   }
 }
