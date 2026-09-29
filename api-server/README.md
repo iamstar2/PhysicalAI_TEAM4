@@ -148,8 +148,7 @@ API_URL=http://<서버>:8080 API_TOKEN=<mechdog_b 토큰> python3 tools/dialog_l
 
 | 무엇 | 누구와 | 지금은 |
 |---|---|---|
-| `alert_logs.level` 허용값에 `INFO` 추가 | 최현수 | info → **INFO**(참고 알림, 처음부터 해제됨) · warn → WARNING · critical → ALERT. 칸이 TEXT 라 스키마 변경 없이 동작하고, 주석의 허용값만 고치면 된다 |
-| 대시보드가 info 를 활성 경고 카드로 띄우는 것 | 백경률 | D 는 info 도 warn · critical 과 똑같이 **활성 카드 + 해제 버튼**으로 띄워, 관리자가 누를 때까지 남는다. info 는 참고 알림이라 이력에만 보이게 하는 편이 맞다. API 는 이미 해제로 저장하고, 대시보드가 보내는 해제는 무시한다 |
+| `alert_logs.level` 허용값에 `INFO` 추가 | 최현수 | info → **INFO**(참고 알림, 처음부터 해제됨) · warn → WARNING · critical → ALERT. 지금 info 를 보내는 노드는 없다 (B 이탈 알림은 09-29 삭제) — 나중에 누가 보내도 경고에 섞이지 않게 둔 것. 칸이 TEXT 라 스키마 변경 없이 동작하고, 주석의 허용값만 고치면 된다 |
 | 한 세션에 판정이 한 번뿐인지 | 여도훈 | **1회 1행으로 합침 (09-29)** — A 판정 흐름도(사진 1장 → 얼굴 · PPE → `policy.decide()`)와 A 의 표 설계에 맞춘 것. 판정 실패 시 새 세션으로 다시 시작한다는 전제라 **같은 세션 = 판정 1회** 로 합친다. 재방문도 새 세션이라 새 행. 한 세션에서 여러 번 판정하게 되면 합치기 기준을 바꿔야 한다 |
 | `escort_logs` session_id 없음 · 중단 표시 | 최현수 | robot_id 숫자는 HW 설계도 이름(mechdog-01~04)과 같아 **그대로 둬도 된다**. 중단은 motion_played='aborted' |
 | `access_decisions` · `event_logs` 에 session_id · msg_id | 최현수 | 없음 — [`sql/proposed_changes.sql`](sql/proposed_changes.sql) |
