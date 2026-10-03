@@ -24,6 +24,8 @@ import threading
 TOPIC = "mechdog/internal/b/eye"
 HOST = os.environ.get("MQTT_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MQTT_PORT", "1883"))
+USER = os.environ.get("MQTT_USER") or None     # bus.py 와 같은 규칙 — 인증 브로커일 때만
+PASS = os.environ.get("MQTT_PASS") or None
 
 IDLE, LISTENING, THINKING, SPEAKING, ERROR = (
     "idle", "listening", "thinking", "speaking", "error")
@@ -49,6 +51,8 @@ def _connect():
                             client_id="mechdog_b_dialog_eye")
         else:
             c = mqtt.Client(client_id="mechdog_b_dialog_eye")
+        if USER:
+            c.username_pw_set(USER, PASS)
         c.connect(HOST, PORT, keepalive=30)
         c.loop_start()
         atexit.register(lambda: (c.loop_stop(), c.disconnect()))
