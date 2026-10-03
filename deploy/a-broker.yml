@@ -2,6 +2,8 @@
 #   docker compose -f deploy/a-broker.yml up -d                      # 브로커만
 #   docker compose -f deploy/a-broker.yml --profile collector up -d  # 수집서버 코드가 생긴 뒤
 # 로봇 4대 · B 파이 · D 대시보드가 전부 여기(BROKER_IP:1883)에 붙는다 — 시연 중에 꺼지면 전원이 끊긴다.
+# 수집서버 값은 '필수(:?)' 로 걸지 않는다 — 걸면 프로필이 꺼져 있어도 compose 가 파일 전체를 거부해
+# 브로커만 띄우는 것조차 막힌다 (10/3 새 노트북 점검에서 발견).
 
 services:
   mosquitto:
@@ -26,8 +28,8 @@ services:
     environment:
       MQTT_HOST: mosquitto            # 같은 노트북의 브로커
       MQTT_PORT: "1883"
-      API_SERVER_URL: http://${API_IP:?deploy/.env 에 API_IP 를 넣으세요}:8080
-      API_TOKEN: ${COLLECTOR_TOKEN:?deploy/.env 에 COLLECTOR_TOKEN 을 넣으세요}
+      API_SERVER_URL: http://${API_IP:-API_IP_미설정}:8080   # deploy/.env 의 API_IP
+      API_TOKEN: ${COLLECTOR_TOKEN:-}                      # deploy/.env 의 COLLECTOR_TOKEN
     volumes:
       - collector_data:/data/ingest   # API 서버가 꺼져 있을 때 쌓아 둘 곳
 
