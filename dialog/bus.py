@@ -24,6 +24,9 @@ from mask import mask
 
 HOST = os.environ.get("MQTT_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MQTT_PORT", "1883"))
+# 브로커에 인증이 걸려 있을 때만 쓴다 (mosquitto/mosquitto.conf 주석의 약속). 비우면 익명 접속.
+USER = os.environ.get("MQTT_USER") or None
+PASS = os.environ.get("MQTT_PASS") or None
 
 T_TOUCH = "mechdog/internal/b/touch"
 T_ULTRA = "mechdog/internal/b/ultrasonic"
@@ -114,6 +117,8 @@ class Bus:
                            "detail": "LWT — 연결 끊김 (ts 는 연결 시각)",
                        }), ensure_ascii=False),
                        qos=0, retain=True)
+            if USER:
+                c.username_pw_set(USER, PASS)
             c.connect(HOST, PORT, keepalive=30)
             c.loop_start()
             self._c = c
