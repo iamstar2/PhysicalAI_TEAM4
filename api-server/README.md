@@ -100,6 +100,16 @@ DB 에 있으면 거기에 받은 msg_id 를 남겨 **서버를 재시작해도*
 **health 의 '최근 상태'** 는 받은 순서로 본다. LWT(offline)의 `ts` 는 접속했던 시각이라 믿을 수 없어서,
 offline 은 받은 시각으로 기록한다 (`dialog/bus.py` 주석과 같은 약속).
 
+**비상용 간이 수집서버** — 수집서버가 없을 때 시험을 이어 가려고 둔 최소 구현 (`tools/collector_lite.py`).
+위 약속 그대로 `mechdog/v1/#` 을 받아 `/events` 로 넘기고, 실패하면 쌓아 두었다가 `/events/batch` 로 재전송한다.
+
+```bash
+.venv/Scripts/pip install paho-mqtt requests
+MQTT_HOST=<브로커 IP> API_URL=http://127.0.0.1:8080 API_TOKEN=<collector 토큰> .venv/Scripts/python tools/collector_lite.py
+```
+
+10/3 점검: 이 노트북 브로커 + 실제 B 파이 · B 본체 + 팀 예시 8종 → **12건 적재 · 거부 0**.
+
 ### 대시보드 (백경률)
 
 | 할 일 | 호출 |
