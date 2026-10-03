@@ -51,6 +51,10 @@
 2. 라이브러리 매니저에서 **`PubSubClient`** (Nick O'Leary) 설치
 3. 나머지 Hiwonder 라이브러리(`Hiwonder.*`, `HW_MechDog.*`, `Servo.*`, `WMMatrixLed.*`,
    `pwm_servo.*`, `action.h`)는 이 폴더에 이미 같이 들어있다 — 벤더 예제에서 그대로 복사한 것
+4. **벤더 `MechDog_Arduino` 라이브러리(+ `MPU6050`)를 Arduino `libraries` 폴더에 설치** — 스케치가
+   `mech_base_types.h` 를 include 하는데 이 파일은 이 폴더가 아니라 벤더 라이브러리(사전 컴파일본)에 있다.
+   없으면 `fatal error: mech_base_types.h: No such file or directory` 로 빌드가 멈춘다 (새 노트북 이식 때 확인, 2026-10-03).
+   빌드 확인: `arduino-cli compile --fqbn esp32:esp32:esp32 .` → 저장 공간 약 58%
 
 ## 2. 접속 정보 채우기 (`secrets.h`)
 
