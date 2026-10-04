@@ -21,9 +21,12 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import sys
 import time
+from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 import dlog
@@ -775,6 +778,14 @@ class Session:
                 return out
 
 
+def _a_event_key(msg: dict) -> str | None:
+    """A 이벤트 번호 앞 8자리 — 판정에서 바꾼 세션(`…-mechdog_a-<8자리>`)과 A 가 보낸
+    gate.session(`sess-<uuid>`)이 같은 이벤트인지 알아보는 데 쓴다."""
+    sid = str(msg.get("session_id") or "")
+    m = re.match(r"^sess-\d{14}-mechdog_a-([0-9a-f]{8})$", sid) or re.match(r"^sess-([0-9a-f]{8})-", sid)
+    return m.group(1) if m else None
+
+
 def main() -> int:
     bus = Bus()
     if not bus.connect():
@@ -793,6 +804,7 @@ def main() -> int:
         return 0
 
     print("gate.session 대기 중... (Ctrl+C 로 종료)")
+    seen_a: deque[str] = deque(maxlen=200)
     try:
         while True:
             if not bus.sessions:
@@ -803,6 +815,16 @@ def main() -> int:
             if msg.get("_expires") and time.time() > msg["_expires"]:
                 print(f"  A 판정 유효 시간 지남 — 대화 미개시 ({msg.get('session_id')})")
                 continue
+            # A 는 인가 한 번에 판정(gatekeeper/access/decision)과 인계(gate.session)를 **둘 다** 보낸다
+            # (10/4 현장 — 같은 방문자로 대화가 두 번 열렸다). 같은 A 이벤트면 한 번만 연다.
+            key = _a_event_key(msg)
+            if key and key in seen_a:
+                print(f"  같은 A 판정의 중복 인계 — 건너뜀 ({msg.get('session_id')})")
+                continue
+            if key:
+                seen_a.append(key)
+            if not msg.get("_expires"):
+                print(f"[A 인계] {datetime.now():%H:%M:%S} gate.session · {msg.get('session_id')}", flush=True)
             p = msg.get("payload", {})
             # 2 개시 조건 재검증 — 미인가·PPE 불합격이면 대화를 열지 않는다 (BR-B-14)
             if p.get("handoff_to") != "mechdog_b":
