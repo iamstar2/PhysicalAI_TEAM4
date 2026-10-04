@@ -44,6 +44,10 @@ MAX_UTTER_S = float(os.environ.get("MAX_UTTER_S", "10.0"))
 # 무음/발화 경계. 시작할 때 실제 배경 소음을 재서 이 값 위로 올려 잡는다.
 VAD_FLOOR = 0.012
 VAD_MARGIN = 3.0      # 배경 소음 대비 몇 배를 발화로 볼지
+# 문턱 상한. 시작 0.3초에 **이미 말소리가 섞이면**(띵 직후 바로 "네") 그 말소리를 배경으로 재서
+# 문턱이 말소리보다 높아지고, 그 뒤로는 아무리 말해도 'no_speech' 가 된다 (10/4 현장 —
+# "직접 안내해 드릴까요?" 대답만 못 잡음). 이 마이크 실측: 조용 ≈ 0.013 · 말소리 ≈ 0.3~0.44.
+VAD_MAX = float(os.environ.get("VAD_MAX", "0.06"))
 
 MIC_HINT = os.environ.get("MIC_NAME", "C10")
 SPK_HINT = os.environ.get("SPK_NAME", "TITAN")
@@ -253,9 +257,10 @@ def record_until_silence(path: str | Path, dev: str | None = None,
 
             # 클릭을 지난 뒤 처음 0.3초로 배경 소음을 재서 문턱을 잡는다.
             # 고정값 하나로는 조용한 사무실과 시끄러운 물류센터 정문을 같이 못 쓴다.
+            # 평균이 아니라 **가장 조용한 블록**으로 재고 상한을 둔다 — 말소리가 섞여도 문턱이 못 올라간다.
             if len(noise) < 6 and not speaking:
                 noise.append(level)
-                thresh = max(VAD_FLOOR, float(np.mean(noise)) * VAD_MARGIN)
+                thresh = max(VAD_FLOOR, min(float(min(noise)) * VAD_MARGIN, VAD_MAX))
 
             if not speaking:
                 if level >= thresh:
