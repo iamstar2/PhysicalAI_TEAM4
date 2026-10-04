@@ -73,7 +73,7 @@ static const char* FW_VERSION   = "b-body-1.1";
 static const uint32_t TOUCH_POLL_MS   = 20;    // 벤더 Button_Task 와 같은 주기
 static const uint32_t ULTRA_PERIOD_MS = 300;   // FR-B-1001: 0.3초 주기 폴링
 static const uint32_t RECONNECT_MS    = 3000;  // MQTT 재접속 시도 간격
-static const uint16_t MQTT_KEEPALIVE_S = 5;    // LWT 가 약 7.5초 안에 뜨도록
+static const uint16_t MQTT_KEEPALIVE_S = 15;   // 와이파이 순간 끊김(수 초)을 견디도록 — LWT 는 약 22초 안에 (10/4 현장, 5초면 자주 끊김)
 
 // 초음파 유효 범위 (cm). 범위 밖이면 측정 실패로 보고 valid=false 로 보낸다.
 //   단위 확인 완료 — Hiwonder.cpp 의 getDistance() 가 `(raw_mm) / 10` 을 돌려주므로 cm 다.

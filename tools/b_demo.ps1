@@ -33,12 +33,24 @@ if (-not $Mode) {
     $Mode = if ($m -eq '2') { 'demo' } else { 'gate' }
 }
 $User = ''; $Pass = ''
+if (-not $cfg.Contains('user')) { $cfg['user'] = '' }
 if (-not $DryRun) {
-    $User = Read-Host '브로커 계정 (없으면 Enter)'
-    if ($User) { $Pass = Read-Host '브로커 비밀번호' }
+    $User = Ask '브로커 계정 (없으면 -)' $(if ($cfg.user) { $cfg.user } else { '-' })
+    if ($User -eq '-') { $User = '' }
+}
+if ($DryRun -and $cfg.user) { $User = $cfg.user }
+if ($User) {
+    # 공유받은 브로커/credentials.env 에 있으면 자동으로 (mechdog_b → MECHDOG_B_PASS). 없으면 묻는다.
+    $credFile = Join-Path $Root '브로커\credentials.env'
+    $var = ($User.ToUpper() -replace '[^A-Z0-9]', '_') + '_PASS'
+    if (Test-Path $credFile) {
+        $line = Get-Content $credFile -Encoding UTF8 | Where-Object { $_ -match "^export $var=" } | Select-Object -First 1
+        if ($line) { $Pass = ($line -replace "^export $var=", '').Trim("'", '"', ' '); Write-Host "비밀번호: credentials.env 의 $var 사용" -ForegroundColor DarkGray }
+    }
+    if (-not $Pass -and -not $DryRun) { $Pass = Read-Host '브로커 비밀번호' }
 }
 if (-not $Broker) { Write-Host '브로커 IP 가 없습니다.' -ForegroundColor Red; Read-Host 'Enter 로 종료'; exit 1 }
-$cfg.broker = $Broker; $cfg.port = $Port; $cfg.pi = $Pi; $cfg.mode = $Mode
+$cfg.broker = $Broker; $cfg.port = $Port; $cfg.pi = $Pi; $cfg.mode = $Mode; $cfg.user = $User
 $cfg | ConvertTo-Json | Set-Content $CfgPath -Encoding UTF8
 
 # --- 사전 점검 -------------------------------------------------------------------
@@ -71,8 +83,8 @@ Write-Host 'B 가 종료됐습니다. 다시 띄우려면 실행기를 다시 �
 $auth = if ($User) { "-u $User -P '$($Pass -replace "'", "''")'" } else { '' }
 $pane2 = $head + @"
 `$host.UI.RawUI.WindowTitle = '브로커 메시지'
-Write-Host '브로커 $Broker 의 mechdog/# 메시지 (B 본체 초음파는 너무 잦아 뺌)' -ForegroundColor Cyan
-docker run --rm -i eclipse-mosquitto:2 mosquitto_sub -h $Broker -p $Port $auth -t 'mechdog/#' -T 'mechdog/internal/b/ultrasonic' -v
+Write-Host '브로커 ${Broker}:$Port — 팀 메시지 + A 판정 (B 본체 초음파는 너무 잦아 뺌)' -ForegroundColor Cyan
+docker run --rm -i eclipse-mosquitto:2 mosquitto_sub -h $Broker -p $Port $auth -t 'mechdog/#' -t 'gatekeeper/access/decision' -T 'mechdog/internal/b/ultrasonic' -v
 "@
 if ($apiRunning) {
     $pane3 = $head + @"
