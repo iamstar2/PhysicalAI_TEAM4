@@ -38,7 +38,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import paho.mqtt.client as mqtt
 from jsonschema import Draft202012Validator
 
-from robot_commands import alert_action, clear_alert, emergency_stop as robot_emergency_stop, warning_action
+from robot_commands import (
+    alert_action,
+    clear_alert,
+    emergency_stop as robot_emergency_stop,
+    set_eye_color,
+    warning_action,
+)
 from security_state import ALERT, NORMAL, PENDING, WARNING, SecurityStateStore, Transition
 
 # security-dashboard/app/mqtt_client.py -> security-dashboard -> 저장소 루트
@@ -193,12 +199,39 @@ class SecurityDashboardClient:
 
     # --- 판정 -> 액션 ----------------------------------------------------
 
+    def _target_eye_color(self) -> str:
+        """로봇 전체에 걸린 눈 색 하나를 정한다 (로봇이 1대뿐이라 세션별 색은 없다).
+
+        D 소유 활성 경고 중 ALERT(critical)가 하나라도 있으면 빨강, WARNING(warn)만
+        있으면 주황. 활성 경고가 없으면 가장 최근 방문자 판정이 PENDING일 때 노랑,
+        그 외(NORMAL/판정 없음/관리자 해제로 초기화됨)는 파랑. 단독 실행(state 없음)
+        이면 가장 최근 세션 상태만으로 정한다.
+        """
+        if self.state is not None:
+            levels = self.state.d_owned_active_levels(SRC_NODE)
+            if "critical" in levels:
+                return "red"
+            if "warn" in levels:
+                return "orange"
+        _session_id, rec = self.store.latest()
+        status = rec.status if rec is not None else None
+        if self.state is None and status == ALERT:
+            return "red"
+        if self.state is None and status == WARNING:
+            return "orange"
+        if status == PENDING:
+            return "yellow"
+        return "blue"
+
     def _handle_transition(self, transition: Transition) -> None:
         if not transition.changed:
             return  # 같은 상태 반복 -> 중복 경고 방지, 아무것도 안 함
 
+        # 2026-10-03: 눈 LED 요구사항 - 경고 시작 순서는 "눈 색 -> 부저/자세"다.
+        # 눈 색은 활성 경고 전체를 보고 정하므로 alert.event를 먼저 기록한 뒤 정한다.
+        # WARNING->ALERT 전이에서는 눈만 빨강으로 바뀌고, 부저/자세는
+        # start_buzzer_and_posture()의 기존 멱등성 때문에 다시 전송되지 않는다.
         if transition.new_status == WARNING:
-            warning_action()
             self._publish_alert(
                 session_id=transition.session_id,
                 track_id=transition.visitor_id,
@@ -206,8 +239,10 @@ class SecurityDashboardClient:
                 reason=_alert_reason_for_ppe(transition.ppe_items),
                 snapshot_path=transition.snapshot_path,
             )
-        elif transition.new_status == ALERT:
-            alert_action()
+            set_eye_color(self._target_eye_color())
+            warning_action()
+            return
+        if transition.new_status == ALERT:
             self._publish_alert(
                 session_id=transition.session_id,
                 track_id=transition.visitor_id,
@@ -215,7 +250,14 @@ class SecurityDashboardClient:
                 reason="unauthorized",
                 snapshot_path=transition.snapshot_path,
             )
-        elif transition.new_status == NORMAL and transition.old_status in (WARNING, ALERT):
+            set_eye_color(self._target_eye_color())
+            alert_action()
+            return
+
+        # NORMAL/PENDING: 활성 경고가 남아 있으면 그 경고 색이 유지되고(같은 색이면
+        # 재전송 안 함), 없을 때만 파랑/노랑으로 바뀐다. 부저/자세는 건드리지 않는다.
+        set_eye_color(self._target_eye_color())
+        if transition.new_status == NORMAL and transition.old_status in (WARNING, ALERT):
             # 2026-09-17: 여기서 clear_alert()(실물 부저 중지+normal_attitude)를 부르지
             # 않는다 - A가 재검사로 NORMAL을 다시 보내도 물리 경고는 자동 종료하면 안
             # 된다(정책: 관리자 수동 해제만이 종료 조건). resolved=true 자동 발행도 안
@@ -352,6 +394,9 @@ class SecurityDashboardClient:
         # 해제한 (session_id, reason) 하나만 보고 바로 복귀시키면 안 되고, D 소유
         # 활성 경고가 "전역적으로" 0개가 됐을 때만 부저를 끄고 normal_attitude로
         # 돌아간다(다른 세션에 D 경고가 남아있으면 계속 경고 상태 유지).
+        # 2026-10-03: 눈 색 - 다른 활성 경고가 남아 있으면 그 경고 색(예: ALERT를 해제했는데
+        # WARNING이 남으면 주황)으로, 없으면 파랑으로. 같은 색이면 재전송하지 않는다.
+        set_eye_color(self._target_eye_color())
         if self.state.count_d_owned_active_alerts(SRC_NODE) == 0:
             clear_alert()  # [D ROBOT] CLEAR_ALERT - 부저 중지 + normal_attitude
         return True

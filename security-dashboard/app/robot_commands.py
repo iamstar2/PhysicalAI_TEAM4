@@ -62,6 +62,19 @@ _NORMAL_ATTITUDE_CMD = "CMD|2|1|99|$"  # set_default_pose만 트리거 (근거: 
 _BUZZER_ON_CMD = "CMD|7|1|$"
 _BUZZER_OFF_CMD = "CMD|7|0|$"
 
+# 눈 LED(발광 초음파 모듈의 RGB 2개, index 0 = 양쪽) - 앱 BLE 프로토콜에 이미 있는
+# "CMD|4|3|R|G|B|$"(main.py BLE 분기 `_COMMAND==4, _DATA==3` -> i2csonar.setRGB(0,R,G,B))와
+# 같은 형식이다. 원래 WiFi 분기에는 이 명령이 없어 펌웨어에 추가했다
+# (firmware/mechdog_d_micropython/, 2026-10-03 실물 적용). 그 이전 펌웨어에서는
+# 로봇이 이 명령을 조용히 무시한다. 주황/노랑은 2026-10-03 실물 눈 LED를 보며 맞춘 값이다 -
+# 이 LED는 빨강이 강하게 나와 일반 RGB 값(255,80,0)/(255,255,0)은 둘 다 같은 주황으로 보였다.
+_EYE_RGB = {
+    "blue": (0, 0, 255),      # NORMAL
+    "red": (255, 0, 0),       # ALERT (미인가)
+    "orange": (255, 20, 0),   # WARNING (안전모/조끼 미착용)
+    "yellow": (255, 130, 0),  # PENDING (판정 보류)
+}
+
 # --- 드라이버 설정 (모듈 로드 시 환경변수로 1회 초기화, configure()로 재설정 가능) ---
 
 DRIVER = "mock"
@@ -79,6 +92,7 @@ _write_lock = threading.Lock()  # 같은 시리얼/소켓에 자세 명령과 �
 _state_lock = threading.Lock()  # _warning_active 플래그 보호 (start/stop 멱등성 판단용)
 
 _warning_active = False  # "지금 경고 자세+부저 상태인가" - 부저 반복 스레드 대신 이 플래그 하나로 관리
+_eye_color: str | None = None  # 마지막으로 전송에 성공한 눈 색 - 같은 색 재전송 방지용
 
 
 def configure(
@@ -241,6 +255,30 @@ def is_warning_active() -> bool:
     return _warning_active
 
 
+def current_eye_color() -> str | None:
+    """대시보드가 마지막으로 보낸 눈 색(실물이 그 색인지 재확인한 값은 아님)."""
+    return _eye_color
+
+
+def set_eye_color(color: str) -> None:
+    """눈 LED 색을 바꾼다. 이미 같은 색을 보냈으면 다시 보내지 않는다.
+
+    부저/자세와는 독립된 별개 명령이다 - WARNING->ALERT처럼 부저/자세는 그대로
+    두고 눈 색만 바꿔야 하는 경우가 있어 start_buzzer_and_posture()와 분리했다.
+    전송에 실패하면 _eye_color를 갱신하지 않아 다음 상태 변화 때 다시 시도한다.
+    """
+    global _eye_color
+    if color not in _EYE_RGB:
+        raise ValueError(f"지원하지 않는 눈 색: {color!r}")
+    with _state_lock:
+        if _eye_color == color:
+            return
+    r, g, b = _EYE_RGB[color]
+    if _send(f"CMD|4|3|{r}|{g}|{b}|$"):
+        with _state_lock:
+            _eye_color = color
+
+
 def start_buzzer_and_posture() -> None:
     """경고 자세(stand_two_legs) + 부저 시작 명령을 각각 1회씩 보낸다.
 
@@ -287,8 +325,9 @@ def _reset_for_tests() -> None:
     인스턴스화하지 않음) 테스트 간에 상태가 새면 안 된다 - 각 테스트 시나리오
     시작 전에 이 함수를 호출해 깨끗한 상태에서 시작한다.
     """
-    global _serial_conn, _udp_sock, _last_error, _warning_active
+    global _serial_conn, _udp_sock, _last_error, _warning_active, _eye_color
     _warning_active = False
+    _eye_color = None
     _serial_conn = None
     _udp_sock = None
     _last_error = None

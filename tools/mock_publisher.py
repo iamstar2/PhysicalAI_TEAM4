@@ -254,6 +254,92 @@ def scenario_no_helmet(dry_run: bool, speed: float) -> None:
     pub.close()
 
 
+def scenario_no_vest(dry_run: bool, speed: float) -> None:
+    """안전조끼 미착용 -> 경고 -> 재착용 -> 자동 해제.
+
+    scenario_no_helmet과 구조가 완전히 동일하고 helmet/vest만 뒤집었다 -
+    security_state._compute_status가 ppe_overall=='fail'이면 어떤 항목이
+    실패했는지와 무관하게 동일한 WARNING 규칙을 적용하고,
+    mqtt_client._alert_reason_for_ppe가 items.vest=='fail'일 때 reason을
+    "no_vest"로 정하므로(이미 스키마 AlertReason에 포함됨) 대시보드/로봇 쪽
+    코드는 전혀 바꿀 필요가 없었다. 이 시나리오는 그 경로를 편하게 재현하기
+    위한 mock_publisher 쪽 테스트 보조 시나리오일 뿐이다.
+    """
+    pub = Publisher(dry_run)
+    session_id = new_session_id("mechdog_a")
+    visitor_id = "visitor-004"
+
+    # 시험 시나리오 5번 입력(얼굴 authorized + 안전모 착용 + 조끼 미착용)에 맞춰 얼굴 판정을 먼저 보낸다.
+    pub.publish(
+        src="mechdog_a",
+        session_id=session_id,
+        payload={
+            "msg_type": "vision.face",
+            "visitor_id": visitor_id,
+            "result": "authorized",
+            "confidence": 0.95,
+            "similarity": 0.88,
+            "snapshot_path": f"/data/snap/{session_id}/face.jpg",
+        },
+    )
+    _sleep(0.5, speed)
+
+    pub.publish(
+        src="mechdog_a",
+        session_id=session_id,
+        payload={
+            "msg_type": "vision.ppe",
+            "visitor_id": visitor_id,
+            "items": {"helmet": "pass", "vest": "fail"},
+            "overall": "fail",
+            "confidence": 0.90,
+            "snapshot_path": f"/data/snap/{session_id}/ppe_1.jpg",
+        },
+    )
+    _sleep(0.5, speed)
+
+    pub.publish(
+        src="mechdog_d",
+        session_id=session_id,
+        payload={
+            "msg_type": "alert.event",
+            "level": "warn",
+            "reason": "no_vest",
+            "track_id": visitor_id,
+            "snapshot_path": f"/data/snap/{session_id}/alert.jpg",
+            "resolved": False,
+        },
+    )
+    _sleep(2.0, speed)
+
+    pub.publish(
+        src="mechdog_a",
+        session_id=session_id,
+        payload={
+            "msg_type": "vision.ppe",
+            "visitor_id": visitor_id,
+            "items": {"helmet": "pass", "vest": "pass"},
+            "overall": "pass",
+            "confidence": 0.92,
+            "snapshot_path": f"/data/snap/{session_id}/ppe_2.jpg",
+        },
+    )
+    _sleep(0.5, speed)
+
+    pub.publish(
+        src="mechdog_d",
+        session_id=session_id,
+        payload={
+            "msg_type": "alert.event",
+            "level": "warn",
+            "reason": "no_vest",
+            "track_id": visitor_id,
+            "resolved": True,
+        },
+    )
+    pub.close()
+
+
 def scenario_undetermined(dry_run: bool, speed: float) -> None:
     """얼굴 판정 불가 3회 -> D 이관."""
     pub = Publisher(dry_run)
@@ -347,6 +433,7 @@ SCENARIOS = {
     "normal": scenario_normal,
     "unauthorized": scenario_unauthorized,
     "no_helmet": scenario_no_helmet,
+    "no_vest": scenario_no_vest,
     "undetermined": scenario_undetermined,
     "escort_lost": scenario_escort_lost,
     "health": scenario_health,

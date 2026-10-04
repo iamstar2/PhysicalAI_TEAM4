@@ -105,23 +105,32 @@ function renderVisitor(visitor) {
   }
 }
 
-function renderStatus(visitor) {
+function renderStatus(visitor, activeAlerts) {
   const el = document.getElementById("statusBadge");
   if (!visitor) {
     el.textContent = "데이터 없음";
     el.className = "status-badge status-unknown";
-    return;
-  }
-  const status = visitor.status;
-  if (!status) {
+  } else if (!visitor.status) {
     // 관리자가 방금 경고를 해제해서 status가 초기화된 상태 - 데이터가 없는 게 아니라
     // "해제되어 다음 판정을 기다리는" 상태라서 PENDING과 같은 스타일로 보여준다.
     el.textContent = "판정 대기 (해제됨)";
     el.className = "status-badge status-pending";
-    return;
+  } else {
+    el.textContent = `${STATUS_LABEL[visitor.status] || visitor.status} (${visitor.status})`;
+    el.className = "status-badge status-" + visitor.status.toLowerCase();
   }
-  el.textContent = `${STATUS_LABEL[status] || status} (${status})`;
-  el.className = "status-badge status-" + status.toLowerCase();
+
+  // 배지 자체는 최신 판정이다. 재검사로 정상이 돼도 관리자가 해제하기 전까지 경고는
+  // 남아 있으므로, 아래 "현재 활성 경고" 목록과 같은 배열로 개수/최고 등급을 덧붙인다.
+  const alerts = activeAlerts || [];
+  if (alerts.length > 0) {
+    el.textContent += ` / 미해제 경고 ${alerts.length}건 (아래 목록에서 해제 필요)`;
+    if (alerts.some((a) => a.level === "critical")) {
+      el.className = "status-badge status-alert";
+    } else if (alerts.some((a) => a.level === "warn")) {
+      el.className = "status-badge status-warning";
+    }
+  }
 }
 
 function renderActiveAlerts(alerts) {
@@ -244,7 +253,8 @@ function renderRobotStatus(robot) {
     el.className = "robot-status";
     return;
   }
-  const driverLabel = robot.driver === "serial" ? "SERIAL(실물)" : "MOCK(콘솔만)";
+  const driverLabel =
+    robot.driver === "udp" ? "UDP(실물)" : robot.driver === "serial" ? "SERIAL(레거시)" : "MOCK(콘솔만)";
   const postureLabel = robot.warning_active ? "경고 자세+부저 작동 중" : "기본 자세(대기)";
   el.className = "robot-status" + (robot.last_error ? " has-error" : "");
   el.innerHTML =
@@ -268,7 +278,7 @@ async function poll() {
     renderMqtt(data.mqtt_connected);
     renderNodes(data.nodes);
     renderVisitor(data.current_visitor);
-    renderStatus(data.current_visitor);
+    renderStatus(data.current_visitor, data.active_alerts);
     renderActiveAlerts(data.active_alerts);
     renderHistory(data.recent_alerts);
     renderEmergency(data.emergency_stop);

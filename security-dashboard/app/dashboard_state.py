@@ -85,6 +85,14 @@ class DashboardState:
         with self._lock:
             return sum(1 for alert in self.active_alerts.values() if alert.get("src") == src_node)
 
+    def d_owned_active_levels(self, src_node: str) -> set[str]:
+        """src_node가 낸 활성 경고들의 level 집합 - 눈 색(빨강/주황) 결정용.
+
+        B/C가 낸 경고는 D의 물리 동작 대상이 아니므로 포함하지 않는다.
+        """
+        with self._lock:
+            return {alert.get("level") for alert in self.active_alerts.values() if alert.get("src") == src_node}
+
     def set_emergency_stop(self, value: bool) -> None:
         with self._lock:
             self.emergency_stop = value

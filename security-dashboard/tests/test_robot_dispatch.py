@@ -17,6 +17,9 @@ _get_udp_socket을 FakeSerialConn / FakeUdpSocket으로 바꿔치기해서(Fake)
     8. 반복 호출해도 물리 명령이 중복 전송되지 않음(부저 반복 스레드는 2026-09-27 제거)
     9. UDP 드라이버에서 부저(CMD|7)와 자세 명령이 별개 패킷으로 분리 전송됨
     10. UDP 전송 실패 시 대시보드(MQTT 콜백)가 종료되지 않음
+    11. 눈 LED: 경고 시작 순서(눈 -> 자세/부저), WARNING->ALERT는 눈만 빨강으로 갱신
+    12. 눈 LED: 일부 해제 시 남은 경고 색 유지, 전부 해제 시 파랑 + 기본 자세
+    13. 눈 LED: 같은 판정 반복 시 재전송 없음, PENDING은 노랑
 
 실행 (security-dashboard 폴더 기준):
     python tests/test_robot_dispatch.py
@@ -330,6 +333,102 @@ def scenario_udp_failure_does_not_crash() -> None:
     robot_commands._reset_for_tests()
 
 
+_EYE = {
+    "blue": b"CMD|4|3|0|0|255|$",
+    "red": b"CMD|4|3|255|0|0|$",
+    "orange": b"CMD|4|3|255|20|0|$",
+    "yellow": b"CMD|4|3|255|130|0|$",
+}
+
+
+def _eye_writes(fake: FakeSerialConn) -> list[bytes]:
+    return [w for w in fake.writes if w.startswith(b"CMD|4|3|")]
+
+
+def _vest_fail_envelope(session_id: str):
+    return mqtt_client_mod.make_envelope(
+        session_id=session_id,
+        payload={
+            "msg_type": "vision.ppe",
+            "visitor_id": "visitor-x",
+            "items": {"helmet": "pass", "vest": "fail"},
+            "overall": "fail",
+            "confidence": 0.9,
+            "snapshot_path": "/data/snap/x/ppe_vest.jpg",
+        },
+    )
+
+
+def scenario_eye_order_and_warning_to_alert() -> None:
+    print("\n--- 11) 눈 LED: 경고 시작 순서(눈 -> 자세/부저), WARNING->ALERT는 눈만 갱신 ---")
+    robot_commands._reset_for_tests()
+    fake = _setup_serial_driver()
+    client, state, published = make_client()
+    session_s = "sess-eye-0001"
+
+    feed(client, "vision.ppe", _vest_fail_envelope(session_s))
+    first_three = fake.writes[:3]
+    check("WARNING 시 첫 명령이 주황 눈", first_three[:1] == [_EYE["orange"]])
+    check("그다음 자세/부저 명령", first_three[1:] == [b"CMD|2|1|6|$", b"CMD|7|1|$"])
+
+    feed(client, "vision.face", _face_unauthorized_envelope(session_s))
+    check("WARNING->ALERT에서 눈이 빨강으로 갱신됨", _eye_writes(fake)[-1] == _EYE["red"])
+    check("WARNING->ALERT에서 자세 재전송 없음", _stand_two_legs_count(fake) == 1)
+    check("WARNING->ALERT에서 부저 재전송 없음", sum(1 for w in fake.writes if w == b"CMD|7|1|$") == 1)
+
+    robot_commands._reset_for_tests()
+
+
+def scenario_eye_clear_keeps_remaining_color() -> None:
+    print("\n--- 12) 눈 LED: 일부 해제 시 남은 경고 색 유지, 전부 해제 시 파랑+기본 자세 ---")
+    robot_commands._reset_for_tests()
+    fake = _setup_serial_driver()
+    client, state, published = make_client()
+
+    feed(client, "vision.ppe", _vest_fail_envelope("sess-eye-W"))       # WARNING -> 주황
+    feed(client, "vision.face", _face_unauthorized_envelope("sess-eye-A"))  # ALERT -> 빨강
+    check("두 경고가 겹치면 빨강", robot_commands.current_eye_color() == "red")
+
+    client.clear_active_alert("sess-eye-A", "unauthorized")
+    check("ALERT만 해제하면 남은 WARNING 색(주황)으로", robot_commands.current_eye_color() == "orange")
+    check("남은 경고가 있으니 기본 자세 복귀 안 함", _normal_attitude_count(fake) == 0)
+    check("경고 자세/부저 상태 유지", robot_commands.is_warning_active())
+
+    client.clear_active_alert("sess-eye-W", "no_vest")
+    check("전부 해제하면 파랑", robot_commands.current_eye_color() == "blue")
+    check("전부 해제하면 기본 자세 복귀 1회", _normal_attitude_count(fake) == 1)
+
+    robot_commands._reset_for_tests()
+
+
+def scenario_eye_no_duplicate_and_pending_yellow() -> None:
+    print("\n--- 13) 눈 LED: 같은 판정 반복 시 재전송 없음, PENDING은 노랑 ---")
+    robot_commands._reset_for_tests()
+    fake = _setup_serial_driver()
+    client, state, published = make_client()
+
+    feed(client, "vision.face", mqtt_client_mod.make_envelope(
+        session_id="sess-eye-P",
+        payload={
+            "msg_type": "vision.face",
+            "visitor_id": "visitor-x",
+            "result": "authorized",
+            "confidence": 0.95,
+            "similarity": 0.9,
+            "snapshot_path": "/data/snap/x/face.jpg",
+        },
+    ))
+    check("얼굴만 온 PENDING은 노랑", robot_commands.current_eye_color() == "yellow")
+    check("PENDING에서는 자세/부저 명령 없음", _stand_two_legs_count(fake) == 0)
+
+    feed(client, "vision.ppe", _vest_fail_envelope("sess-eye-P"))
+    feed(client, "vision.ppe", _vest_fail_envelope("sess-eye-P"))
+    check("같은 조끼 위반 반복에도 주황 눈 전송은 1회", _eye_writes(fake).count(_EYE["orange"]) == 1)
+    check("같은 조끼 위반 반복에도 자세 1회", _stand_two_legs_count(fake) == 1)
+
+    robot_commands._reset_for_tests()
+
+
 def main() -> None:
     scenario_same_session_multi_reason_single_dispatch()
     scenario_different_sessions_overlap_single_dispatch()
@@ -340,6 +439,9 @@ def main() -> None:
     scenario_repeated_start_not_duplicated()
     scenario_udp_driver_separates_posture_and_buzzer()
     scenario_udp_failure_does_not_crash()
+    scenario_eye_order_and_warning_to_alert()
+    scenario_eye_clear_keeps_remaining_color()
+    scenario_eye_no_duplicate_and_pending_yellow()
 
     print()
     if FAILURES:
