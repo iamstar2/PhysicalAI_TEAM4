@@ -22,6 +22,12 @@ topic read mechdog/v1/gate/session
 topic write mechdog/v1/dialog/result
 topic write mechdog/v1/alert/event
 topic write mechdog/v1/system/health/mechdog_b
+# 안내견 가용 확인(FR-B-708) — C 상태를 본다. 이 예시를 만든 뒤 생긴 기능이라 빠져 있었다 (10/4 현장 확인)
+topic read mechdog/v1/escort/status
+# 파이 ↔ B 본체(ESP32) 내부 토픽 (터치 · 초음파 · 상태 · 눈 LED). 같은 계정을 둘이 쓴다
+topic readwrite mechdog/internal/b/#
+# A(ai_gatekeeper) 판정 — A 가 gate.session 대신 이걸 낸다. B 가 통과 판정으로 대화를 연다
+topic read gatekeeper/access/decision
 
 # --- MechDog C (escort-service) ---
 # 목적지 확정 구독, 에스코트 상태·자기 상태 발행
