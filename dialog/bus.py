@@ -47,7 +47,10 @@ T_HEALTH = "mechdog/v1/system/health/mechdog_b"
 T_ESCORT = os.environ.get("ESCORT_TOPIC", "mechdog/v1/escort/status")
 
 # 1 Hz 스트림이라 이만큼 조용하면 "모른다"로 본다. 오래된 값으로 판단하지 않기 위함.
-ESCORT_STALE_S = 3.0
+# C 는 상태가 바뀔 때만 retain 으로 보낸다 (10/4 김별이 — 1초 주기 발행 안 함).
+# 그래서 기본은 '오래됐다' 판단을 하지 않고 마지막 값을 믿는다. C 가 다시 1초 주기로 보내면
+# ESCORT_STALE_S=3 처럼 켜면 된다 (0 = 끔).
+ESCORT_STALE_S = float(os.environ.get("ESCORT_STALE_S", "0"))
 
 KST = timezone(timedelta(hours=9))
 QUEUE_MAX = 10          # 04 §4.6
@@ -325,13 +328,14 @@ class Bus:
         **`idle` 일 때만 True 다.** `moving`·`arrived`·`aborted` 는 전부 "못 받음"으로
         똑같이 본다 — B 가 구분할 이유가 없다.
 
-        값을 한 번도 못 받았거나 3초 넘게 조용하면 **False** 다. 1 Hz 스트림이라
-        조용하다는 건 모른다는 뜻이고, 모를 때 제안하면 못 지킬 약속을 하게 된다.
+        값을 한 번도 못 받았으면 **False** 다 — 모를 때 넘기면 못 지킬 약속을 하게 된다.
+        C 는 바뀔 때만 retain 으로 보내므로 마지막 값을 그대로 믿는다. (`ESCORT_STALE_S` 를
+        켜면 그 시간 넘게 조용할 때도 False — 1초 주기로 보내던 때의 규칙)
         대화 자체는 멈추지 않고 위치 안내로 진행한다 (`AC-708-4`).
         """
         if self.escort_state is None:
             return False
-        if time.time() - self.escort_at > ESCORT_STALE_S:
+        if ESCORT_STALE_S and time.time() - self.escort_at > ESCORT_STALE_S:
             return False
         return self.escort_state == "idle"
 
