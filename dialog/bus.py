@@ -32,6 +32,12 @@ T_TOUCH = "mechdog/internal/b/touch"
 T_ULTRA = "mechdog/internal/b/ultrasonic"
 T_EYE = "mechdog/internal/b/eye"
 T_SESSION = "mechdog/v1/gate/session"
+# A(ai_gatekeeper)는 팀 규격 gate.session 대신 자체 토픽으로 판정을 낸다 (10/4 현장 확인).
+# 통과(allow) 판정을 gate.session 과 같은 모양으로 바꿔 넣어, 대화 쪽 코드는 그대로 둔다.
+# 비우면(GK_DECISION_TOPIC=) 구독하지 않는다.
+T_DECISION = os.environ.get("GK_DECISION_TOPIC", "gatekeeper/access/decision")
+GK_SKEW_S = float(os.environ.get("GK_SKEW_S", "5"))      # 노트북 · 파이 시계 차이 여유
+GK_GRACE_S = float(os.environ.get("GK_GRACE_S", "10"))   # B 가 앞 손님 응대 중일 때 기다려 줄 시간
 T_RESULT = "mechdog/v1/dialog/result"
 T_ALERT = "mechdog/v1/alert/event"
 T_HEALTH = "mechdog/v1/system/health/mechdog_b"
@@ -86,6 +92,7 @@ class Bus:
         self.distance_cm: int | None = None
         self.distance_at = 0.0
         self.sessions: deque[dict] = deque(maxlen=4)
+        self._gk_seen: deque[str] = deque(maxlen=500)     # A 판정 event_id 중복 거르기
 
         self.escort_state: str | None = None   # idle / moving / arrived / aborted
         self.escort_at = 0.0
@@ -134,6 +141,8 @@ class Bus:
     def _on_connect(self, client, userdata, flags, rc, properties=None) -> None:
         for t in (T_TOUCH, T_ULTRA, T_SESSION):
             client.subscribe(t, qos=1)
+        if T_DECISION:
+            client.subscribe(T_DECISION, qos=1)
         client.subscribe(T_ESCORT, qos=0)      # 상태 스트림이라 QoS 0 (schema/README §8)
         self._flush()
         self.publish_health("ready")
@@ -160,6 +169,11 @@ class Bus:
         elif msg.topic == T_SESSION:
             self.sessions.append(d)
 
+        elif T_DECISION and msg.topic == T_DECISION:
+            s = self._from_decision(d)
+            if s:
+                self.sessions.append(s)
+
         elif msg.topic == T_ESCORT:
             # 봉투 안에 payload 가 들어 있다. C 가 봉투 없이 바로 보낼 수도 있어
             # 양쪽 다 받는다 — 스키마가 확정되기 전이라 관대하게 읽는다.
@@ -168,6 +182,35 @@ class Bus:
             if isinstance(st, str):
                 self.escort_state = st
                 self.escort_at = time.time()
+
+    def _from_decision(self, d: dict) -> dict | None:
+        """A 판정 → gate.session 모양. 통과(allow)만 대화를 연다.
+
+        A 의 소비자 규칙(TEAM_HANDOFF): event_id 로 멱등 · valid_for_ms 가 지난 allow 는 적용하지 않는다.
+        세션 번호는 팀 형식에 A 의 event_id 앞 8자리를 넣어, DB 에서 A 기록과 이어 볼 수 있게 한다.
+        """
+        eid = d.get("event_id")
+        if d.get("decision") != "allow" or not eid or eid in self._gk_seen:
+            return None
+        self._gk_seen.append(eid)
+        valid_s = float(d.get("valid_for_ms", 3000)) / 1000
+        try:
+            t = datetime.fromisoformat(str(d["ts"]).replace("Z", "+00:00"))
+            age = (datetime.now(timezone.utc) - t).total_seconds()
+        except (KeyError, ValueError):
+            t, age = datetime.now(timezone.utc), 0.0
+        if age > valid_s + GK_SKEW_S:
+            print(f"[bus] 만료된 A 통과 판정 무시 ({age:.1f}s) {eid}")
+            return None
+        person = d.get("person") or {}
+        sid = f"sess-{t.astimezone(KST):%Y%m%d%H%M%S}-mechdog_a-{eid[:8]}"
+        print(f"[bus] A 통과 판정 → 세션 {sid}")
+        return {"ver": 1, "msg_id": eid, "ts": now_ts(), "src": "mechdog_a", "session_id": sid,
+                "_expires": time.time() + valid_s + GK_GRACE_S,
+                "payload": {"msg_type": "gate.session",
+                            "visitor_id": str(person.get("person_id") or f"visitor-{eid[:8]}"),
+                            "face_result": "authorized", "ppe_result": "pass",
+                            "handoff_to": "mechdog_b"}}
 
     # ---- 발행 ------------------------------------------------------------
     def _send(self, topic: str, doc: dict) -> bool:

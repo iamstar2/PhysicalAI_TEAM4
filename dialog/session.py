@@ -783,6 +783,10 @@ def main() -> int:
                 time.sleep(0.2)
                 continue
             msg = bus.sessions.popleft()
+            # A 판정에서 온 인계는 유효 시간이 있다 — 앞 손님 응대가 길어 지났으면 열지 않는다
+            if msg.get("_expires") and time.time() > msg["_expires"]:
+                print(f"  A 판정 유효 시간 지남 — 대화 미개시 ({msg.get('session_id')})")
+                continue
             p = msg.get("payload", {})
             # 2 개시 조건 재검증 — 미인가·PPE 불합격이면 대화를 열지 않는다 (BR-B-14)
             if p.get("handoff_to") != "mechdog_b":
