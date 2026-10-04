@@ -149,6 +149,21 @@ def chime(name: str) -> None:
     play(f)
 
 
+_PHRASES: dict[str, str] | None = None
+
+
+def _phrase_text(stem: str) -> str:
+    """재생하는 파일(greet_2 등)의 문장 — 로그에서 B 가 무슨 말을 했는지 바로 보이게."""
+    global _PHRASES
+    if _PHRASES is None:
+        try:
+            from gen_tts import build_phrases
+            _PHRASES = build_phrases()
+        except Exception:
+            _PHRASES = {}
+    return _PHRASES.get(stem, stem)
+
+
 def say(key: str, eye_state: str | None = None) -> bool:
     """캐시된 안내 음성을 재생한다 (눈은 '안내중').
 
@@ -175,6 +190,7 @@ def say(key: str, eye_state: str | None = None) -> bool:
     # 눈은 보통 '말하기(파랑)' 다. **에스컬레이션처럼 다른 색을 유지해야 하는 멘트는 받아서 쓴다** —
     # 예전에는 무조건 파랑으로 바꿔서, 바로 앞에서 켠 빨강이 보이기도 전에 덮였다(`LOG-84`).
     eye.set_state(eye_state or eye.SPEAKING)
+    print(f'  [말  ] "{_phrase_text(path.stem)}"', flush=True)
     t0 = time.time()
     ok = play(path, stop=_stop_on_touch)
     dlog.stage(prompt_id=path.stem, tts_ms=int((time.time() - t0) * 1000))

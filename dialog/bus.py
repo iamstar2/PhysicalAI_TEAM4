@@ -170,6 +170,7 @@ class Bus:
             self.sessions.append(d)
 
         elif T_DECISION and msg.topic == T_DECISION:
+            self._log_decision(d)
             s = self._from_decision(d)
             if s:
                 self.sessions.append(s)
@@ -182,6 +183,21 @@ class Bus:
             if isinstance(st, str):
                 self.escort_state = st
                 self.escort_at = time.time()
+
+    def _log_decision(self, d: dict) -> None:
+        """A 인가 판정을 한 줄로 남긴다 — 시연 중 'A 에서 인가가 왔다' 를 파이 화면에서 바로 본다.
+        차단(deny)은 매초 와서 화면을 덮으므로 남기지 않는다 (10/4 김별이)."""
+        if d.get("decision") != "allow":
+            return
+        person = d.get("person") or {}
+        score = person.get("match_score")
+        allow = d.get("decision") == "allow"
+        print(f"[A 판정] {datetime.now(KST):%H:%M:%S} "
+              + ("★ 인가(allow)" if allow else "차단(deny)")
+              + f" · 사유 {','.join(d.get('reasons') or []) or '-'}"
+              + f" · 사람 {person.get('person_id', '-')}"
+              + (f" · 점수 {float(score):.2f}" if score is not None else "")
+              + f" · {str(d.get('event_id', ''))[:8]}", flush=True)
 
     def _from_decision(self, d: dict) -> dict | None:
         """A 판정 → gate.session 모양. 통과(allow)만 대화를 연다.
