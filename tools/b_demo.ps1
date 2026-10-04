@@ -3,7 +3,7 @@
 # 지난번 입력값은 %LOCALAPPDATA%\mechdog_b_demo.json 에 기억한다 (저장소 밖).
 # 이 창을 열어 두는 동안 노트북이 잠들지 않는다 — 잠들면 SSH 가 끊겨 B 가 같이 꺼진다.
 param([string]$Broker, [string]$Port, [string]$Pi, [ValidateSet('', 'gate', 'demo')][string]$Mode = '',
-      [switch]$DryRun)
+      [switch]$DryRun, [switch]$Auto)
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
@@ -24,6 +24,13 @@ function Ask($label, $def) {
 }
 Write-Host ''
 Write-Host '=== B 시연 실행기 ===' -ForegroundColor Cyan
+if ($Auto) {
+    # 질문 없이 지난 설정 그대로 (바탕화면 B_시연_실행.bat). 바꾸려면 B_시연_설정변경.bat
+    if (-not $cfg.broker) { Write-Host '저장된 설정이 없습니다 — B_시연_설정변경.bat 을 먼저 실행하세요.' -ForegroundColor Red; Read-Host 'Enter 로 종료'; exit 1 }
+    if (-not $Broker) { $Broker = $cfg.broker }; if (-not $Port) { $Port = $cfg.port }
+    if (-not $Pi) { $Pi = $cfg.pi }; if (-not $Mode) { $Mode = $cfg.mode }
+    Write-Host ("설정: 브로커 {0}:{1} · 파이 {2} · {3} 모드 · 계정 {4}" -f $Broker, $Port, $Pi, $Mode, $(if ($cfg.user) { $cfg.user } else { '없음' }))
+}
 if (-not $Broker) { $Broker = Ask '브로커 IP (A 노트북)' $cfg.broker }
 if (-not $Port) { $Port = Ask '브로커 포트' $cfg.port }
 if (-not $Pi) { $Pi = Ask '파이 IP' $cfg.pi }
@@ -34,7 +41,8 @@ if (-not $Mode) {
 }
 $User = ''; $Pass = ''
 if (-not $cfg.Contains('user')) { $cfg['user'] = '' }
-if (-not $DryRun) {
+if ($Auto) { $User = $cfg.user }
+elseif (-not $DryRun) {
     $User = Ask '브로커 계정 (없으면 -)' $(if ($cfg.user) { $cfg.user } else { '-' })
     if ($User -eq '-') { $User = '' }
 }
